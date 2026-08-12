@@ -1,0 +1,73 @@
+.toolbar {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+}
+
+.toolbar-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.toolbar-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #a89f8a;
+  margin-right: 4px;
+  letter-spacing: 0.04em;
+}
+
+.swatch-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 2px;
+  border: 2px solid transparent;
+  cursor: pointer;
+}
+
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 2px;
+  border: 2px solid transparent;
+  background: #2a2f37;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #e8e2d0;
+  font-size: 12px;
+}
+
+.level-switcher {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  background: #2a2f37;
+  border-radius: 2px;
+  padding: 4px;
+}
+
+.level-btn {
+  padding: 6px 12px;
+  border-radius: 2px;
+  border: none;
+  font-size: 14px;
+  text-transform: capitalize;
+  cursor: pointer;
+}
+
+.toolbar button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.toolbar-hint {
+  font-size: 12px;
+  color: #a89f8a;
+  font-style: italic;
+}

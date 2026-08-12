@@ -1,0 +1,14 @@
+.hex-canvas {
+  background: #f0e6d2;
+  border-radius: 6px;
+  padding: 8px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+}
+
+.hex-clickable {
+  cursor: pointer;
+}
+
+.hex-river-cursor {
+  cursor: crosshair;
+}
