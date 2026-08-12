@@ -1,16 +1,23 @@
 import type { TerrainType, MapLevel } from "../types/map";
 
-// Dimensione in pixel di un esagono: ogni livello (Globale, Regionale, Locale) mostra
-// sempre una griglia della STESSA forma (stesso raggio), solo con contenuto diverso —
-// per questo un solo HEX_SIZE basta per tutti e tre.
+// Dimensione in pixel di un esagono Locale. Ai livelli superiori si usa HEX_SIZE * ratio.
 export const HEX_SIZE = 32;
 
-// Raggio (in numero di celle) di ogni griglia esagonale mostrata a schermo.
-// Diametro = 2*GRID_RADIUS + 1 = 11 celle, per rispettare il rapporto ~10/11 richiesto:
-// ogni esagono "genitore", una volta aperto, mostra una griglia di 11 celle di diametro.
-export const GRID_RADIUS = 5;
+// Rapporto di scala tra un livello e il successivo (~diametro in celle, come richiesto: ~10/11).
+export const RATIO = 10;
 
-export const LEVELS: MapLevel[] = ["globale", "regionale", "locale"];
+export const LEVELS: MapLevel[] = ["locale", "regionale", "globale"];
+
+// Rapporto ASSOLUTO rispetto al livello Locale (non incrementale): comodo perché permette
+// di aggregare/dipingere in blocco direttamente dalle celle Locale, senza passaggi intermedi.
+export const LEVEL_RATIOS: Record<MapLevel, number> = {
+  locale: 1,
+  regionale: RATIO,
+  globale: RATIO * RATIO,
+};
+
+// Quante "corone" di esagoni mostrare intorno al centro della telecamera, a ogni livello.
+export const VIEW_RADIUS = 6;
 
 export const TERRAINS: Record<TerrainType, { label: string; color: string }> = {
   pianura: { label: "Pianura", color: "#c9cf7a" },

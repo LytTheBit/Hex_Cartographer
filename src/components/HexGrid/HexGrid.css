@@ -5,6 +5,11 @@
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
 }
 
+.hex-svg {
+  touch-action: none;
+  user-select: none;
+}
+
 .hex-clickable {
   cursor: pointer;
 }

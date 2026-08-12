@@ -7,10 +7,10 @@ import "./Toolbar.css";
 interface ToolbarProps {
     tool: Tool;
     setTool: (t: Tool) => void;
-    disabled: boolean;
+    isLocale: boolean;
 }
 
-export function Toolbar({ tool, setTool, disabled }: ToolbarProps) {
+export function Toolbar({ tool, setTool, isLocale }: ToolbarProps) {
     return (
         <div className="toolbar">
             <div className="toolbar-group">
@@ -19,7 +19,6 @@ export function Toolbar({ tool, setTool, disabled }: ToolbarProps) {
                     <button
                         key={key}
                         className="swatch-btn"
-                        disabled={disabled}
                         style={{
                             backgroundColor: t.color,
                             borderColor: tool.type === "terrain" && tool.value === key ? "#c9a227" : "transparent",
@@ -34,25 +33,24 @@ export function Toolbar({ tool, setTool, disabled }: ToolbarProps) {
                 <span className="toolbar-label">Elementi</span>
                 <button
                     className="icon-btn"
-                    disabled={disabled}
+                    disabled={!isLocale}
                     style={{ borderColor: tool.type === "river" ? "#c9a227" : "transparent" }}
-                    title="Fiume"
+                    title="Fiume (richiede zoom Locale)"
                     onClick={() => setTool({ type: "river" })}
                 >
                     <Waves size={16} color="#7fb3d9" />
                 </button>
                 <button
                     className="icon-btn"
-                    disabled={disabled}
+                    disabled={!isLocale}
                     style={{ borderColor: tool.type === "feature" && tool.value === "casa" ? "#c9a227" : "transparent" }}
-                    title="Casa"
+                    title="Casa (richiede zoom Locale)"
                     onClick={() => setTool({ type: "feature", value: "casa" })}
                 >
                     <Home size={16} color="#e8e2d0" />
                 </button>
                 <button
                     className="icon-btn"
-                    disabled={disabled}
                     style={{ borderColor: tool.type === "erase" ? "#c9a227" : "transparent" }}
                     title="Gomma"
                     onClick={() => setTool({ type: "erase" })}
@@ -61,7 +59,9 @@ export function Toolbar({ tool, setTool, disabled }: ToolbarProps) {
                 </button>
             </div>
 
-            {disabled && <span className="toolbar-hint">Entra in un esagono fino al livello Locale per dipingere</span>}
+            {!isLocale && (
+                <span className="toolbar-hint">A questo zoom il terreno si dipinge in blocco su tutta l'area visibile</span>
+            )}
         </div>
     );
 }

@@ -1,0 +1,55 @@
+.zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 14px;
+    background: #2a2f37;
+    border-radius: 4px;
+    padding: 4px 6px;
+}
+
+.zoom-btn,
+.overlay-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 3px;
+    border: none;
+    background: transparent;
+    color: #e8e2d0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.zoom-btn:hover:not(:disabled),
+.overlay-btn:hover:not(:disabled) {
+    background: #383e48;
+}
+
+.zoom-btn:disabled,
+.overlay-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.zoom-level-label {
+    font-size: 13px;
+    text-transform: capitalize;
+    color: #c9a227;
+    font-weight: 600;
+    min-width: 66px;
+    text-align: center;
+}
+
+.overlay-btn {
+    margin-left: 8px;
+    border-left: 1px solid #3d434e;
+    border-radius: 0 3px 3px 0;
+    padding-left: 8px;
+    width: 34px;
+}
+
+.overlay-btn-active {
+    color: #c9a227;
+}
