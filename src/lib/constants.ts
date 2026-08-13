@@ -16,8 +16,9 @@ export const LEVEL_RATIOS: Record<MapLevel, number> = {
   globale: RATIO * RATIO,
 };
 
-// Quante "corone" di esagoni mostrare intorno al centro della telecamera, a ogni livello.
-export const VIEW_RADIUS = 6;
+// Dimensione (larghezza = altezza) del canvas della mappa, in pixel. Fissa, indipendente
+// dalle celle generate: sono le celle a riempire questo rettangolo, non viceversa.
+export const VIEWPORT_PX = 680;
 
 export const TERRAINS: Record<TerrainType, { label: string; color: string }> = {
   pianura: { label: "Pianura", color: "#c9cf7a" },

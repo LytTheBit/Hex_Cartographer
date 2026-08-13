@@ -2,8 +2,8 @@ import { useMemo, useRef } from "react";
 import type { MouseEvent, PointerEvent, WheelEvent } from "react";
 import { Building, Building2, Home, Mountain, Trees, Waves } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { HEX_SIZE, RATIO, TERRAINS, VIEW_RADIUS } from "../../lib/constants";
-import { generateHexRing, tileKey } from "../../lib/hex/grid";
+import { HEX_SIZE, RATIO, TERRAINS, VIEWPORT_PX } from "../../lib/constants";
+import { generateHexRect, tileKey } from "../../lib/hex/grid";
 import { angleToEdge, axialToParent, axialToPixel, hexPoints, pixelToAxial } from "../../lib/hex/coordinates";
 import { aggregateMacroCell, type ClusterData } from "../../lib/hex/aggregation";
 import { computeRiverLines } from "../../lib/hex/rivers";
@@ -52,16 +52,18 @@ export function HexGrid({
                         }: HexGridProps) {
   const isLocale = level === "locale";
   const svgRef = useRef<SVGSVGElement>(null);
-  const dragState = useRef<{ lastX: number; lastY: number; moved: boolean } | null>(null);
+  // wasDrag: sopravvive al pointerup (a differenza di dragState, azzerato subito dopo il
+  // rilascio) per poter dire al click, che scatta DOPO il pointerup, "era un trascinamento".
+  const dragState = useRef<{ lastX: number; lastY: number; moved: boolean; pointerId: number } | null>(null);
+  const wasDrag = useRef(false);
   const lastWheelTime = useRef(0);
 
   const hexSize = HEX_SIZE * ratio;
-  // Cella (Locale o macro, a seconda del livello) più vicina alla posizione attuale della telecamera.
   const [centerQ, centerR] = axialToParent(camera.q, camera.r, ratio);
 
   const cells = useMemo(
-      () => generateHexRing(VIEW_RADIUS).map(({ q, r }) => ({ q: q + centerQ, r: r + centerR })),
-      [centerQ, centerR]
+      () => generateHexRect(VIEWPORT_PX / 2, hexSize).map(({ q, r }) => ({ q: q + centerQ, r: r + centerR })),
+      [centerQ, centerR, hexSize]
   );
 
   const positions = useMemo(
@@ -73,15 +75,9 @@ export function HexGrid({
       [cells, hexSize]
   );
 
-  const xs = positions.map((p) => p.x);
-  const ys = positions.map((p) => p.y);
-  const boxWidth = Math.max(...xs) - Math.min(...xs) + hexSize * 2.4;
-  const boxHeight = Math.max(...ys) - Math.min(...ys) + hexSize * 2.4;
-  // Il centro del viewBox segue la posizione ESATTA (anche frazionaria) della telecamera,
-  // non la cella arrotondata: così il pan risulta fluido invece che "a scatti".
   const [cameraPixelX, cameraPixelY] = axialToPixel(camera.q, camera.r, HEX_SIZE);
-  const minX = cameraPixelX - boxWidth / 2;
-  const minY = cameraPixelY - boxHeight / 2;
+  const minX = cameraPixelX - VIEWPORT_PX / 2;
+  const minY = cameraPixelY - VIEWPORT_PX / 2;
 
   const riverLines = useMemo(() => (isLocale ? computeRiverLines(cells, getTile, HEX_SIZE) : []), [isLocale, cells, getTile]);
 
@@ -101,7 +97,6 @@ export function HexGrid({
     return result;
   }, [isLocale, cells, ratio, tilesStore]);
 
-  // Overlay: contorni delle macro-celle Regionale visibili, sopra la griglia Locale.
   const overlayCells = useMemo(() => {
     if (!isLocale || !showOverlay) return [];
     const seen = new Set<string>();
@@ -116,7 +111,6 @@ export function HexGrid({
     return result;
   }, [isLocale, showOverlay, cells]);
 
-  /** Converte coordinate schermo in coordinate SVG interne (viewBox), robusto a zoom/CSS. */
   const toSvgPoint = (clientX: number, clientY: number): { x: number; y: number } => {
     const svg = svgRef.current;
     if (!svg) return { x: 0, y: 0 };
@@ -136,8 +130,11 @@ export function HexGrid({
   };
 
   const handlePointerDown = (event: PointerEvent<SVGSVGElement>) => {
-    dragState.current = { lastX: event.clientX, lastY: event.clientY, moved: false };
-    svgRef.current?.setPointerCapture(event.pointerId);
+    dragState.current = { lastX: event.clientX, lastY: event.clientY, moved: false, pointerId: event.pointerId };
+    // NIENTE setPointerCapture qui: se lo chiamassimo su ogni pointerdown, il click finale
+    // verrebbe reindirizzato all'<svg> invece che all'esagono sotto il cursore, e i click
+    // sugli esagoni smetterebbero del tutto di funzionare. Lo facciamo solo più sotto,
+    // quando è chiaro che si tratta di un vero trascinamento.
   };
 
   const handlePointerMove = (event: PointerEvent<SVGSVGElement>) => {
@@ -145,20 +142,26 @@ export function HexGrid({
     if (!drag) return;
     const dxScreen = event.clientX - drag.lastX;
     const dyScreen = event.clientY - drag.lastY;
-    if (Math.abs(dxScreen) > DRAG_THRESHOLD_PX || Math.abs(dyScreen) > DRAG_THRESHOLD_PX) drag.moved = true;
+
+    if (!drag.moved && (Math.abs(dxScreen) > DRAG_THRESHOLD_PX || Math.abs(dyScreen) > DRAG_THRESHOLD_PX)) {
+      drag.moved = true;
+      svgRef.current?.setPointerCapture(drag.pointerId);
+    }
     if (!drag.moved) return;
 
     const start = toSvgPoint(drag.lastX, drag.lastY);
     const current = toSvgPoint(event.clientX, event.clientY);
     const [dq, dr] = pixelToAxial(current.x - start.x, current.y - start.y, HEX_SIZE);
-    onPanBy(-dq, -dr); // trascinare a destra deve spostare la vista a sinistra
+    onPanBy(-dq, -dr);
 
     drag.lastX = event.clientX;
     drag.lastY = event.clientY;
   };
 
   const handlePointerUp = (event: PointerEvent<SVGSVGElement>) => {
-    svgRef.current?.releasePointerCapture(event.pointerId);
+    const drag = dragState.current;
+    if (drag?.moved) svgRef.current?.releasePointerCapture(event.pointerId);
+    wasDrag.current = drag?.moved ?? false;
     dragState.current = null;
   };
 
@@ -174,9 +177,9 @@ export function HexGrid({
       <div className="hex-canvas">
         <svg
             ref={svgRef}
-            viewBox={`${minX} ${minY} ${boxWidth} ${boxHeight}`}
-            width={Math.min(boxWidth, 720)}
-            height={Math.min(boxHeight, 720)}
+            viewBox={`${minX} ${minY} ${VIEWPORT_PX} ${VIEWPORT_PX}`}
+            width={VIEWPORT_PX}
+            height={VIEWPORT_PX}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
@@ -195,7 +198,10 @@ export function HexGrid({
             const key = tileKey(q, r);
 
             const handleClick = (event: MouseEvent) => {
-              if (dragState.current?.moved) return; // era un trascinamento, non un click
+              if (wasDrag.current) {
+                wasDrag.current = false;
+                return;
+              }
               if (isLocale && tool.type === "river") onRiverEdge(q, r, edgeFromClick(event, x, y));
               else onCellClick(q, r);
             };
