@@ -3,7 +3,7 @@ import type { AxialCoord, MapLevel, Tile, TileMap, TerrainType } from "../types/
 import { tileKey } from "../lib/hex/grid";
 import { EDGE_DIRECTIONS, oppositeEdge } from "../lib/hex/coordinates";
 import { getMacroChildren } from "../lib/hex/aggregation";
-import { LEVELS, LEVEL_RATIOS } from "../lib/constants";
+import { LEVELS, LEVEL_RATIOS, VISUAL_ZOOM_MAX, VISUAL_ZOOM_MIN, VISUAL_ZOOM_STEP } from "../lib/constants";
 
 export type Tool =
     | { type: "terrain"; value: TerrainType }
@@ -13,10 +13,15 @@ export type Tool =
 
 const DEFAULT_TILE: Tile = { terrain: "pianura", features: {} };
 
+function clampVisualZoom(z: number): number {
+    return Math.min(VISUAL_ZOOM_MAX, Math.max(VISUAL_ZOOM_MIN, z));
+}
+
 export function useMapState() {
     const [tilesStore, setTilesStore] = useState<TileMap>({});
     const [tool, setTool] = useState<Tool>({ type: "terrain", value: "pianura" });
-    const [zoomIndex, setZoomIndex] = useState(0); // 0 = locale, 1 = regionale, 2 = globale
+    const [zoomIndex, setZoomIndexState] = useState(0); // 0 = locale, 1 = regionale, 2 = globale
+    const [visualZoom, setVisualZoomState] = useState(1); // zoom "a schermo", indipendente dal layer
     const [camera, setCamera] = useState<AxialCoord>({ q: 0, r: 0 }); // posizione, in coordinate Locale
     const [showOverlay, setShowOverlay] = useState(false);
 
@@ -33,8 +38,19 @@ export function useMapState() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isLocale]);
 
-    const zoomIn = useCallback(() => setZoomIndex((z) => Math.max(0, z - 1)), []);
-    const zoomOut = useCallback(() => setZoomIndex((z) => Math.min(LEVELS.length - 1, z + 1)), []);
+    /** Cambia layer di grandezza direttamente (0=Locale, 1=Regionale, 2=Globale). */
+    const setLayer = useCallback((index: number) => {
+        setZoomIndexState(Math.min(LEVELS.length - 1, Math.max(0, index)));
+        setVisualZoomState(1); // riparti da una vista "a schermo intero" sul nuovo layer
+    }, []);
+
+    /** Zoom VISIVO: scala continua indipendente dal layer, moltiplica per `factor`. */
+    const zoomVisualBy = useCallback((factor: number) => {
+        setVisualZoomState((z) => clampVisualZoom(z * factor));
+    }, []);
+
+    const zoomVisualIn = useCallback(() => zoomVisualBy(VISUAL_ZOOM_STEP), [zoomVisualBy]);
+    const zoomVisualOut = useCallback(() => zoomVisualBy(1 / VISUAL_ZOOM_STEP), [zoomVisualBy]);
 
     /** Sposta la telecamera di (dq, dr), sempre in coordinate Locale (indipendente dallo zoom). */
     const panBy = useCallback((dq: number, dr: number) => {
@@ -121,12 +137,15 @@ export function useMapState() {
         setTool,
         level,
         zoomIndex,
+        setLayer,
         isLocale,
         ratio,
         camera,
         panBy,
-        zoomIn,
-        zoomOut,
+        visualZoom,
+        zoomVisualIn,
+        zoomVisualOut,
+        zoomVisualBy,
         showOverlay,
         setShowOverlay,
         getTile,

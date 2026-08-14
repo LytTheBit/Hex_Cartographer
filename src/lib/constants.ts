@@ -20,6 +20,12 @@ export const LEVEL_RATIOS: Record<MapLevel, number> = {
 // dalle celle generate: sono le celle a riempire questo rettangolo, non viceversa.
 export const VIEWPORT_PX = 680;
 
+// Zoom VISIVO: scala continua indipendente dal layer di grandezza (Locale/Regionale/
+// Globale). Permette di dezoomare la mappa restando sullo stesso layer di editing.
+export const VISUAL_ZOOM_MIN = 0.35;
+export const VISUAL_ZOOM_MAX = 3.5;
+export const VISUAL_ZOOM_STEP = 1.25; // fattore moltiplicativo per click sui pulsanti +/-
+
 export const TERRAINS: Record<TerrainType, { label: string; color: string }> = {
   pianura: { label: "Pianura", color: "#c9cf7a" },
   foresta: { label: "Foresta", color: "#4f7942" },

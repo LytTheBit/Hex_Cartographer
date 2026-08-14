@@ -2,7 +2,6 @@ import { useMapState } from "./state/useMapState";
 import { Toolbar } from "./components/Toolbar/Toolbar";
 import { ZoomControls } from "./components/Toolbar/ZoomControls";
 import { HexGrid } from "./components/HexGrid/HexGrid";
-import { LEVELS } from "./lib/constants";
 import "./App.css";
 
 export default function App() {
@@ -12,12 +11,15 @@ export default function App() {
         setTool,
         level,
         zoomIndex,
+        setLayer,
         isLocale,
         ratio,
         camera,
         panBy,
-        zoomIn,
-        zoomOut,
+        visualZoom,
+        zoomVisualIn,
+        zoomVisualOut,
+        zoomVisualBy,
         showOverlay,
         setShowOverlay,
         getTile,
@@ -26,10 +28,10 @@ export default function App() {
     } = useMapState();
 
     const hint = !isLocale
-        ? "Clicca un esagono per dipingere il terreno di tutta l'area sottostante. Trascina per spostarti, rotella per zoomare."
+        ? "Clicca un esagono per dipingere il terreno di tutta l'area sottostante. Trascina per spostarti, rotella per lo zoom visivo."
         : tool.type === "river"
             ? "Clicca vicino al lato di un esagono per tracciare un segmento di fiume in quella direzione."
-            : "Dipingi terreni e piazza case. Trascina per spostarti, rotella (o i pulsanti sopra) per zoomare.";
+            : "Dipingi terreni e piazza case. Trascina per spostarti, rotella per lo zoom visivo.";
 
     return (
         <div className="app">
@@ -37,14 +39,13 @@ export default function App() {
             <p className="app-subtitle">Editor di mappe esagonali</p>
 
             <ZoomControls
-                level={level}
                 zoomIndex={zoomIndex}
-                maxZoomIndex={LEVELS.length - 1}
-                onZoomIn={zoomIn}
-                onZoomOut={zoomOut}
+                onSetLayer={setLayer}
+                onZoomVisualIn={zoomVisualIn}
+                onZoomVisualOut={zoomVisualOut}
                 showOverlay={showOverlay}
                 onToggleOverlay={() => setShowOverlay((v) => !v)}
-                isLocale={isLocale}
+                canShowOverlay={level !== "globale"}
             />
 
             <Toolbar tool={tool} setTool={setTool} isLocale={isLocale} />
@@ -53,6 +54,7 @@ export default function App() {
                 level={level}
                 ratio={ratio}
                 camera={camera}
+                visualZoom={visualZoom}
                 tilesStore={tilesStore}
                 getTile={getTile}
                 tool={tool}
@@ -60,8 +62,7 @@ export default function App() {
                 onCellClick={handleCellClick}
                 onRiverEdge={toggleRiverEdge}
                 onPanBy={panBy}
-                onZoomIn={zoomIn}
-                onZoomOut={zoomOut}
+                onZoomVisualBy={zoomVisualBy}
             />
 
             <p className="app-hint">{hint}</p>

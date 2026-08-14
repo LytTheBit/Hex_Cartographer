@@ -6,7 +6,7 @@ import { HEX_SIZE, RATIO, TERRAINS, VIEWPORT_PX } from "../../lib/constants";
 import { generateHexRect, tileKey } from "../../lib/hex/grid";
 import { angleToEdge, axialToParent, axialToPixel, hexPoints, pixelToAxial } from "../../lib/hex/coordinates";
 import { aggregateMacroCell, type ClusterData } from "../../lib/hex/aggregation";
-import { computeRiverLines } from "../../lib/hex/rivers";
+import { computeRiverPaths } from "../../lib/hex/rivers";
 import { Icon } from "../icons/Icon";
 import type { AxialCoord, MapLevel, Tile, TerrainType, TileMap } from "../../types/map";
 import type { Tool } from "../../state/useMapState";
@@ -22,6 +22,7 @@ interface HexGridProps {
   level: MapLevel;
   ratio: number;
   camera: AxialCoord;
+  visualZoom: number;
   tilesStore: TileMap;
   getTile: (q: number, r: number) => Tile;
   tool: Tool;
@@ -29,17 +30,16 @@ interface HexGridProps {
   onCellClick: (q: number, r: number) => void;
   onRiverEdge: (q: number, r: number, edge: number) => void;
   onPanBy: (dq: number, dr: number) => void;
-  onZoomIn: () => void;
-  onZoomOut: () => void;
+  onZoomVisualBy: (factor: number) => void;
 }
 
 const DRAG_THRESHOLD_PX = 4;
-const WHEEL_COOLDOWN_MS = 220;
 
 export function HexGrid({
                           level,
                           ratio,
                           camera,
+                          visualZoom,
                           tilesStore,
                           getTile,
                           tool,
@@ -47,18 +47,19 @@ export function HexGrid({
                           onCellClick,
                           onRiverEdge,
                           onPanBy,
-                          onZoomIn,
-                          onZoomOut,
+                          onZoomVisualBy,
                         }: HexGridProps) {
   const isLocale = level === "locale";
   const svgRef = useRef<SVGSVGElement>(null);
-  // wasDrag: sopravvive al pointerup (a differenza di dragState, azzerato subito dopo il
-  // rilascio) per poter dire al click, che scatta DOPO il pointerup, "era un trascinamento".
   const dragState = useRef<{ lastX: number; lastY: number; moved: boolean; pointerId: number } | null>(null);
   const wasDrag = useRef(false);
-  const lastWheelTime = useRef(0);
 
-  const hexSize = HEX_SIZE * ratio;
+  // pixelBaseSize: scala "canonica" (1 unità = 1 esagono Locale) usata per la posizione
+  // della telecamera, indipendente dal layer. hexSize: dimensione REALE di rendering di
+  // ogni esagono visibile (dipende sia dal layer/ratio, sia dallo zoom visivo).
+  const pixelBaseSize = HEX_SIZE * visualZoom;
+  const hexSize = pixelBaseSize * ratio;
+
   const [centerQ, centerR] = axialToParent(camera.q, camera.r, ratio);
 
   const cells = useMemo(
@@ -75,18 +76,14 @@ export function HexGrid({
       [cells, hexSize]
   );
 
-  const [cameraPixelX, cameraPixelY] = axialToPixel(camera.q, camera.r, HEX_SIZE);
+  const [cameraPixelX, cameraPixelY] = axialToPixel(camera.q, camera.r, pixelBaseSize);
   const minX = cameraPixelX - VIEWPORT_PX / 2;
   const minY = cameraPixelY - VIEWPORT_PX / 2;
 
-  const riverLines = useMemo(() => (isLocale ? computeRiverLines(cells, getTile, HEX_SIZE) : []), [isLocale, cells, getTile]);
-
-  const riverJoints = useMemo(() => {
-    if (!isLocale) return [];
-    return cells
-        .filter(({ q, r }) => (getTile(q, r).features.fiume?.length ?? 0) > 0)
-        .map(({ q, r }) => axialToPixel(q, r, HEX_SIZE));
-  }, [isLocale, cells, getTile]);
+  const riverPaths = useMemo(
+      () => (isLocale ? computeRiverPaths(cells, getTile, pixelBaseSize) : []),
+      [isLocale, cells, getTile, pixelBaseSize]
+  );
 
   const clusterData = useMemo(() => {
     if (isLocale) return {} as Record<string, ClusterData>;
@@ -97,8 +94,11 @@ export function HexGrid({
     return result;
   }, [isLocale, cells, ratio, tilesStore]);
 
+  // Overlay: contorni del layer SUPERIORE a quello corrente (funziona a ogni livello tranne
+  // Globale, dove non c'è nulla sopra). "cells" qui sono già nel sistema di coordinate del
+  // layer corrente, quindi un solo axialToParent(·, RATIO) basta sempre, a ogni livello.
   const overlayCells = useMemo(() => {
-    if (!isLocale || !showOverlay) return [];
+    if (!showOverlay || level === "globale") return [];
     const seen = new Set<string>();
     const result: Array<[number, number]> = [];
     cells.forEach(({ q, r }) => {
@@ -106,10 +106,10 @@ export function HexGrid({
       const key = tileKey(Q, R);
       if (seen.has(key)) return;
       seen.add(key);
-      result.push(axialToPixel(Q, R, HEX_SIZE * RATIO));
+      result.push(axialToPixel(Q, R, hexSize * RATIO));
     });
     return result;
-  }, [isLocale, showOverlay, cells]);
+  }, [showOverlay, level, cells, hexSize]);
 
   const toSvgPoint = (clientX: number, clientY: number): { x: number; y: number } => {
     const svg = svgRef.current;
@@ -131,10 +131,6 @@ export function HexGrid({
 
   const handlePointerDown = (event: PointerEvent<SVGSVGElement>) => {
     dragState.current = { lastX: event.clientX, lastY: event.clientY, moved: false, pointerId: event.pointerId };
-    // NIENTE setPointerCapture qui: se lo chiamassimo su ogni pointerdown, il click finale
-    // verrebbe reindirizzato all'<svg> invece che all'esagono sotto il cursore, e i click
-    // sugli esagoni smetterebbero del tutto di funzionare. Lo facciamo solo più sotto,
-    // quando è chiaro che si tratta di un vero trascinamento.
   };
 
   const handlePointerMove = (event: PointerEvent<SVGSVGElement>) => {
@@ -151,7 +147,7 @@ export function HexGrid({
 
     const start = toSvgPoint(drag.lastX, drag.lastY);
     const current = toSvgPoint(event.clientX, event.clientY);
-    const [dq, dr] = pixelToAxial(current.x - start.x, current.y - start.y, HEX_SIZE);
+    const [dq, dr] = pixelToAxial(current.x - start.x, current.y - start.y, pixelBaseSize);
     onPanBy(-dq, -dr);
 
     drag.lastX = event.clientX;
@@ -166,11 +162,8 @@ export function HexGrid({
   };
 
   const handleWheel = (event: WheelEvent<SVGSVGElement>) => {
-    const now = Date.now();
-    if (now - lastWheelTime.current < WHEEL_COOLDOWN_MS) return;
-    lastWheelTime.current = now;
-    if (event.deltaY < 0) onZoomIn();
-    else onZoomOut();
+    const factor = Math.pow(1.0015, -event.deltaY);
+    onZoomVisualBy(factor);
   };
 
   return (
@@ -187,11 +180,8 @@ export function HexGrid({
             onWheel={handleWheel}
             className="hex-svg"
         >
-          {riverLines.map((l, i) => (
-              <line key={i} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke="#2f6fa8" strokeWidth={HEX_SIZE * 0.38} strokeLinecap="round" />
-          ))}
-          {riverJoints.map(([cx, cy], i) => (
-              <circle key={`joint-${i}`} cx={cx} cy={cy} r={HEX_SIZE * 0.19} fill="#2f6fa8" />
+          {riverPaths.map((d, i) => (
+              <path key={i} d={d} fill="none" stroke="#2f6fa8" strokeWidth={pixelBaseSize * 0.42} strokeLinecap="round" strokeLinejoin="round" />
           ))}
 
           {positions.map(({ q, r, x, y }) => {
@@ -237,11 +227,11 @@ export function HexGrid({
           {overlayCells.map(([x, y], i) => (
               <polygon
                   key={`overlay-${i}`}
-                  points={hexPoints(x, y, HEX_SIZE * RATIO - 1)}
+                  points={hexPoints(x, y, hexSize * RATIO - 1)}
                   fill="none"
                   stroke="#c9a227"
-                  strokeWidth={HEX_SIZE * 0.12}
-                  strokeDasharray={`${HEX_SIZE * 0.3} ${HEX_SIZE * 0.2}`}
+                  strokeWidth={pixelBaseSize * 0.12}
+                  strokeDasharray={`${pixelBaseSize * 0.3} ${pixelBaseSize * 0.2}`}
                   pointerEvents="none"
               />
           ))}
