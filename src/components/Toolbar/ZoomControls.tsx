@@ -1,45 +1,61 @@
 import { Layers, Minus, Plus } from "lucide-react";
-import type { MapLevel } from "../../types/map";
+import { LEVELS } from "../../lib/constants";
 import "./ZoomControls.css";
 
 interface ZoomControlsProps {
-    level: MapLevel;
     zoomIndex: number;
-    maxZoomIndex: number;
-    onZoomIn: () => void;
-    onZoomOut: () => void;
+    onSetLayer: (index: number) => void;
+    onZoomVisualIn: () => void;
+    onZoomVisualOut: () => void;
     showOverlay: boolean;
     onToggleOverlay: () => void;
-    isLocale: boolean;
+    canShowOverlay: boolean;
 }
 
 export function ZoomControls({
-                                 level,
                                  zoomIndex,
-                                 maxZoomIndex,
-                                 onZoomIn,
-                                 onZoomOut,
+                                 onSetLayer,
+                                 onZoomVisualIn,
+                                 onZoomVisualOut,
                                  showOverlay,
                                  onToggleOverlay,
-                                 isLocale,
+                                 canShowOverlay,
                              }: ZoomControlsProps) {
     return (
         <div className="zoom-controls">
-            <button className="zoom-btn" onClick={onZoomOut} disabled={zoomIndex === maxZoomIndex} title="Zoom indietro (o rotella del mouse)">
-                <Minus size={16} />
-            </button>
-            <span className="zoom-level-label">{level}</span>
-            <button className="zoom-btn" onClick={onZoomIn} disabled={zoomIndex === 0} title="Zoom avanti (o rotella del mouse)">
-                <Plus size={16} />
-            </button>
-            <button
-                className={showOverlay ? "overlay-btn overlay-btn-active" : "overlay-btn"}
-                onClick={onToggleOverlay}
-                disabled={!isLocale}
-                title="Mostra i confini della griglia Regionale"
-            >
-                <Layers size={16} />
-            </button>
+            <div className="layer-switch">
+                {LEVELS.map((lv, i) => (
+                    <button
+                        key={lv}
+                        className="layer-btn"
+                        style={{
+                            backgroundColor: zoomIndex === i ? "#c9a227" : "transparent",
+                            color: zoomIndex === i ? "#1b1f24" : "#e8e2d0",
+                            fontWeight: zoomIndex === i ? 600 : 400,
+                        }}
+                        onClick={() => onSetLayer(i)}
+                    >
+                        {lv}
+                    </button>
+                ))}
+            </div>
+
+            <div className="visual-zoom">
+                <button className="zoom-btn" onClick={onZoomVisualOut} title="Zoom visivo indietro (o rotella del mouse)">
+                    <Minus size={16} />
+                </button>
+                <button className="zoom-btn" onClick={onZoomVisualIn} title="Zoom visivo avanti (o rotella del mouse)">
+                    <Plus size={16} />
+                </button>
+                <button
+                    className={showOverlay ? "overlay-btn overlay-btn-active" : "overlay-btn"}
+                    onClick={onToggleOverlay}
+                    disabled={!canShowOverlay}
+                    title="Mostra i confini del layer superiore"
+                >
+                    <Layers size={16} />
+                </button>
+            </div>
         </div>
     );
 }

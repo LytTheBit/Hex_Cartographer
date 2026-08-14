@@ -1,61 +1,67 @@
-import { Layers, Minus, Plus } from "lucide-react";
-import { LEVELS } from "../../lib/constants";
-import "./ZoomControls.css";
+import { Home, Waves } from "lucide-react";
+import { TERRAINS } from "../../lib/constants";
+import type { Tool } from "../../state/useMapState";
+import type { TerrainType } from "../../types/map";
+import "./Toolbar.css";
 
-interface ZoomControlsProps {
-    zoomIndex: number;
-    onSetLayer: (index: number) => void;
-    onZoomVisualIn: () => void;
-    onZoomVisualOut: () => void;
-    showOverlay: boolean;
-    onToggleOverlay: () => void;
-    canShowOverlay: boolean;
+interface ToolbarProps {
+    tool: Tool;
+    setTool: (t: Tool) => void;
+    isLocale: boolean;
 }
 
-export function ZoomControls({
-                                 zoomIndex,
-                                 onSetLayer,
-                                 onZoomVisualIn,
-                                 onZoomVisualOut,
-                                 showOverlay,
-                                 onToggleOverlay,
-                                 canShowOverlay,
-                             }: ZoomControlsProps) {
+export function Toolbar({ tool, setTool, isLocale }: ToolbarProps) {
     return (
-        <div className="zoom-controls">
-            <div className="layer-switch">
-                {LEVELS.map((lv, i) => (
+        <div className="toolbar">
+            <div className="toolbar-group">
+                <span className="toolbar-label">Terreno</span>
+                {(Object.entries(TERRAINS) as [TerrainType, (typeof TERRAINS)[TerrainType]][]).map(([key, t]) => (
                     <button
-                        key={lv}
-                        className="layer-btn"
+                        key={key}
+                        className="swatch-btn"
                         style={{
-                            backgroundColor: zoomIndex === i ? "#c9a227" : "transparent",
-                            color: zoomIndex === i ? "#1b1f24" : "#e8e2d0",
-                            fontWeight: zoomIndex === i ? 600 : 400,
+                            backgroundColor: t.color,
+                            borderColor: tool.type === "terrain" && tool.value === key ? "#c9a227" : "transparent",
                         }}
-                        onClick={() => onSetLayer(i)}
-                    >
-                        {lv}
-                    </button>
+                        title={t.label}
+                        onClick={() => setTool({ type: "terrain", value: key })}
+                    />
                 ))}
             </div>
 
-            <div className="visual-zoom">
-                <button className="zoom-btn" onClick={onZoomVisualOut} title="Zoom visivo indietro (o rotella del mouse)">
-                    <Minus size={16} />
-                </button>
-                <button className="zoom-btn" onClick={onZoomVisualIn} title="Zoom visivo avanti (o rotella del mouse)">
-                    <Plus size={16} />
+            <div className="toolbar-group">
+                <span className="toolbar-label">Elementi</span>
+                <button
+                    className="icon-btn"
+                    disabled={!isLocale}
+                    style={{ borderColor: tool.type === "river" ? "#c9a227" : "transparent" }}
+                    title="Fiume (richiede zoom Locale)"
+                    onClick={() => setTool({ type: "river" })}
+                >
+                    <Waves size={16} color="#7fb3d9" />
                 </button>
                 <button
-                    className={showOverlay ? "overlay-btn overlay-btn-active" : "overlay-btn"}
-                    onClick={onToggleOverlay}
-                    disabled={!canShowOverlay}
-                    title="Mostra i confini del layer superiore"
+                    className="icon-btn"
+                    disabled={!isLocale}
+                    style={{ borderColor: tool.type === "feature" && tool.value === "casa" ? "#c9a227" : "transparent" }}
+                    title="Casa (richiede zoom Locale)"
+                    onClick={() => setTool({ type: "feature", value: "casa" })}
                 >
-                    <Layers size={16} />
+                    <Home size={16} color="#e8e2d0" />
+                </button>
+                <button
+                    className="icon-btn"
+                    style={{ borderColor: tool.type === "erase" ? "#c9a227" : "transparent" }}
+                    title="Gomma"
+                    onClick={() => setTool({ type: "erase" })}
+                >
+                    ✕
                 </button>
             </div>
+
+            {!isLocale && (
+                <span className="toolbar-hint">A questo zoom il terreno si dipinge in blocco su tutta l'area visibile</span>
+            )}
         </div>
     );
 }
