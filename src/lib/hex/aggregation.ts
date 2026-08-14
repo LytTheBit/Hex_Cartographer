@@ -5,11 +5,14 @@ import { generateHexRing, tileKey } from "./grid";
 export interface ClusterData {
   terrain: TerrainType;
   houseCount: number;
+  /** Quota (0-1) di celle Locale con una casa: usata per le icone villaggio/città, che
+   * così funzionano correttamente a qualsiasi livello di aggregazione. */
+  houseDensity: number;
   riverCount: number;
 }
 
 const DEFAULT_TILE: Tile = { terrain: "pianura", features: {} };
-const DEFAULT_CLUSTER: ClusterData = { terrain: "pianura", houseCount: 0, riverCount: 0 };
+const DEFAULT_CLUSTER: ClusterData = { terrain: "pianura", houseCount: 0, houseDensity: 0, riverCount: 0 };
 
 /**
  * Tutte le celle Locale che appartengono alla macro-cella (Q, R) a un dato rapporto.
@@ -47,5 +50,5 @@ export function aggregateMacroCell(Q: number, R: number, ratio: number, tilesSto
     if (tile.features.casa) houseCount++;
     if (tile.features.fiume && tile.features.fiume.length > 0) riverCount++;
   });
-  return { terrain: dominantTerrain(counts), houseCount, riverCount };
+  return { terrain: dominantTerrain(counts), houseCount, houseDensity: houseCount / children.length, riverCount };
 }

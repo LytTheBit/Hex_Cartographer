@@ -38,11 +38,22 @@ export function useMapState() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isLocale]);
 
-    /** Cambia layer di grandezza direttamente (0=Locale, 1=Regionale, 2=Globale). */
-    const setLayer = useCallback((index: number) => {
-        setZoomIndexState(Math.min(LEVELS.length - 1, Math.max(0, index)));
-        setVisualZoomState(1); // riparti da una vista "a schermo intero" sul nuovo layer
-    }, []);
+    /**
+     * Cambia layer di grandezza (0=Locale, 1=Regionale, 2=Globale). Compensa lo zoom visivo
+     * per il salto di `ratio` tra i due layer, così la dimensione APPARENTE degli esagoni
+     * resta la stessa subito dopo il cambio — niente più "un solo esagono enorme" su
+     * Globale, niente più zoom che sembra "resettarsi" ogni volta che cambi layer.
+     */
+    const setLayer = useCallback(
+        (index: number) => {
+            const clamped = Math.min(LEVELS.length - 1, Math.max(0, index));
+            const oldRatio = LEVEL_RATIOS[level];
+            const newRatio = LEVEL_RATIOS[LEVELS[clamped]];
+            setVisualZoomState((z) => clampVisualZoom((z * oldRatio) / newRatio));
+            setZoomIndexState(clamped);
+        },
+        [level]
+    );
 
     /** Zoom VISIVO: scala continua indipendente dal layer, moltiplica per `factor`. */
     const zoomVisualBy = useCallback((factor: number) => {

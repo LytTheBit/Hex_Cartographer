@@ -2,7 +2,7 @@ import { useMemo, useRef } from "react";
 import type { MouseEvent, PointerEvent, WheelEvent } from "react";
 import { Building, Building2, Home, Mountain, Trees, Waves } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { HEX_SIZE, RATIO, TERRAINS, VIEWPORT_PX } from "../../lib/constants";
+import { CITY_DENSITY_THRESHOLD, HEX_SIZE, RATIO, TERRAINS, VIEWPORT_PX, VILLAGE_DENSITY_THRESHOLD } from "../../lib/constants";
 import { generateHexRect, tileKey } from "../../lib/hex/grid";
 import { angleToEdge, axialToParent, axialToPixel, hexPoints, pixelToAxial } from "../../lib/hex/coordinates";
 import { aggregateMacroCell, type ClusterData } from "../../lib/hex/aggregation";
@@ -54,9 +54,6 @@ export function HexGrid({
   const dragState = useRef<{ lastX: number; lastY: number; moved: boolean; pointerId: number } | null>(null);
   const wasDrag = useRef(false);
 
-  // pixelBaseSize: scala "canonica" (1 unità = 1 esagono Locale) usata per la posizione
-  // della telecamera, indipendente dal layer. hexSize: dimensione REALE di rendering di
-  // ogni esagono visibile (dipende sia dal layer/ratio, sia dallo zoom visivo).
   const pixelBaseSize = HEX_SIZE * visualZoom;
   const hexSize = pixelBaseSize * ratio;
 
@@ -94,9 +91,6 @@ export function HexGrid({
     return result;
   }, [isLocale, cells, ratio, tilesStore]);
 
-  // Overlay: contorni del layer SUPERIORE a quello corrente (funziona a ogni livello tranne
-  // Globale, dove non c'è nulla sopra). "cells" qui sono già nel sistema di coordinate del
-  // layer corrente, quindi un solo axialToParent(·, RATIO) basta sempre, a ogni livello.
   const overlayCells = useMemo(() => {
     if (!showOverlay || level === "globale") return [];
     const seen = new Set<string>();
@@ -181,7 +175,7 @@ export function HexGrid({
             className="hex-svg"
         >
           {riverPaths.map((d, i) => (
-              <path key={i} d={d} fill="none" stroke="#2f6fa8" strokeWidth={pixelBaseSize * 0.42} strokeLinecap="round" strokeLinejoin="round" />
+              <path key={i} d={d} fill="none" stroke="#2f6fa8" strokeWidth={pixelBaseSize * 0.55} strokeLinecap="round" strokeLinejoin="round" />
           ))}
 
           {positions.map(({ q, r, x, y }) => {
@@ -215,11 +209,19 @@ export function HexGrid({
 
             const data = clusterData[key];
             const color = TERRAINS[data.terrain].color;
+            const TerrainIconComp = TERRAIN_ICONS[data.terrain];
+            const isCity = data.houseDensity >= CITY_DENSITY_THRESHOLD;
+            const isVillage = !isCity && data.houseDensity >= VILLAGE_DENSITY_THRESHOLD;
             return (
                 <g key={key} className="hex-clickable" onClick={handleClick}>
                   <polygon points={hexPoints(x, y, hexSize - 1)} fill={color} stroke="#5c4a2a" strokeWidth={0.8} />
-                  {data.houseCount >= 14 && <Icon Comp={Building2} x={x} y={y} size={hexSize * 0.45} color="#3b2a1a" />}
-                  {data.houseCount >= 8 && data.houseCount < 14 && <Icon Comp={Building} x={x} y={y} size={hexSize * 0.45} color="#3b2a1a" />}
+                  {isCity ? (
+                      <Icon Comp={Building2} x={x} y={y} size={hexSize * 0.45} color="#3b2a1a" />
+                  ) : isVillage ? (
+                      <Icon Comp={Building} x={x} y={y} size={hexSize * 0.45} color="#3b2a1a" />
+                  ) : (
+                      TerrainIconComp && <Icon Comp={TerrainIconComp} x={x} y={y} size={hexSize * 0.4} color="rgba(0,0,0,0.35)" />
+                  )}
                 </g>
             );
           })}

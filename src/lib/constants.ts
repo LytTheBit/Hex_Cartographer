@@ -22,9 +22,17 @@ export const VIEWPORT_PX = 680;
 
 // Zoom VISIVO: scala continua indipendente dal layer di grandezza (Locale/Regionale/
 // Globale). Permette di dezoomare la mappa restando sullo stesso layer di editing.
-export const VISUAL_ZOOM_MIN = 0.35;
-export const VISUAL_ZOOM_MAX = 3.5;
+// Range molto ampio perché, cambiando layer, il valore viene compensato automaticamente
+// (vedi useMapState.setLayer) e può quindi assumere valori molto diversi da 1.
+export const VISUAL_ZOOM_MIN = 0.001;
+export const VISUAL_ZOOM_MAX = 200;
 export const VISUAL_ZOOM_STEP = 1.25; // fattore moltiplicativo per click sui pulsanti +/-
+
+// Soglie per le icone di villaggio/città, come DENSITÀ (quota di celle Locale con una
+// casa) invece che conteggio assoluto: così funzionano correttamente a ogni livello di
+// aggregazione, non solo a quello per cui erano state tarate.
+export const VILLAGE_DENSITY_THRESHOLD = 0.08; // 8%
+export const CITY_DENSITY_THRESHOLD = 0.12; // 12%
 
 export const TERRAINS: Record<TerrainType, { label: string; color: string }> = {
   pianura: { label: "Pianura", color: "#c9cf7a" },

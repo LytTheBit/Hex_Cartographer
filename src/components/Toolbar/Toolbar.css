@@ -1,63 +1,57 @@
-.zoom-controls {
+.toolbar {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
+  gap: 24px;
+  margin-bottom: 16px;
   flex-wrap: wrap;
   justify-content: center;
-}
-
-.layer-switch,
-.visual-zoom {
-  display: flex;
   align-items: center;
-  gap: 4px;
-  background: #2a2f37;
-  border-radius: 4px;
-  padding: 4px;
 }
 
-.layer-btn {
-  padding: 6px 12px;
-  border-radius: 3px;
-  border: none;
-  font-size: 13px;
-  text-transform: capitalize;
+.toolbar-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.toolbar-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #a89f8a;
+  margin-right: 4px;
+  letter-spacing: 0.04em;
+}
+
+.swatch-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 2px;
+  border: 2px solid transparent;
   cursor: pointer;
 }
 
-.zoom-btn,
-.overlay-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 3px;
-  border: none;
-  background: transparent;
-  color: #e8e2d0;
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 2px;
+  border: 2px solid transparent;
+  background: #2a2f37;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  color: #e8e2d0;
+  font-size: 12px;
 }
 
-.zoom-btn:hover:not(:disabled),
-.overlay-btn:hover:not(:disabled) {
-  background: #383e48;
-}
-
-.overlay-btn:disabled {
-  opacity: 0.3;
+.toolbar button:disabled {
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
-.overlay-btn {
-  margin-left: 4px;
-  border-left: 1px solid #3d434e;
-  border-radius: 0 3px 3px 0;
-  padding-left: 8px;
-  width: 34px;
-}
-
-.overlay-btn-active {
-  color: #c9a227;
+.toolbar-hint {
+  font-size: 12px;
+  color: #a89f8a;
+  font-style: italic;
+  width: 100%;
+  text-align: center;
 }
