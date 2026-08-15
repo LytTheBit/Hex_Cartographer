@@ -1,9 +1,11 @@
 export type TerrainType = "pianura" | "foresta" | "montagna" | "deserto" | "acqua";
 
 export interface TileFeatures {
-  /** Indici di lato (0-5) su cui è presente un segmento di fiume. Vedi lib/hex/coordinates.ts. */
   fiume?: number[];
   casa?: boolean;
+  /** Presenza di una strada in questo esagono: si collega a ogni esagono vicino che ce l'ha
+   * anche lui, passando per i centri (non per i lati, a differenza dei fiumi). */
+  strada?: boolean;
 }
 
 export interface Tile {

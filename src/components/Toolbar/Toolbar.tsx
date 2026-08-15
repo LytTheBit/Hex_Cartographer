@@ -1,4 +1,4 @@
-import { Home, Waves } from "lucide-react";
+import { Home, Route, Waves } from "lucide-react";
 import { TERRAINS } from "../../lib/constants";
 import type { Tool } from "../../state/useMapState";
 import type { TerrainType } from "../../types/map";
@@ -39,6 +39,15 @@ export function Toolbar({ tool, setTool, isLocale }: ToolbarProps) {
                     onClick={() => setTool({ type: "river" })}
                 >
                     <Waves size={16} color="#7fb3d9" />
+                </button>
+                <button
+                    className="icon-btn"
+                    disabled={!isLocale}
+                    style={{ borderColor: tool.type === "feature" && tool.value === "strada" ? "#c9a227" : "transparent" }}
+                    title="Strada (richiede zoom Locale)"
+                    onClick={() => setTool({ type: "feature", value: "strada" })}
+                >
+                    <Route size={16} color="#d98c3a" />
                 </button>
                 <button
                     className="icon-btn"

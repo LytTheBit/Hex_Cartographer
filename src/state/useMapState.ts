@@ -7,7 +7,7 @@ import { LEVELS, LEVEL_RATIOS, VISUAL_ZOOM_MAX, VISUAL_ZOOM_MIN, VISUAL_ZOOM_STE
 
 export type Tool =
     | { type: "terrain"; value: TerrainType }
-    | { type: "feature"; value: "casa" }
+    | { type: "feature"; value: "casa" | "strada" }
     | { type: "river" }
     | { type: "erase" };
 
@@ -85,8 +85,10 @@ export function useMapState() {
                 const current = prev[key] ?? DEFAULT_TILE;
                 let next: Tile;
                 if (tool.type === "terrain") next = { ...current, terrain: tool.value };
-                else if (tool.type === "feature") next = { ...current, features: { ...current.features, casa: !current.features.casa } };
-                else if (tool.type === "erase") next = { terrain: "pianura", features: {} };
+                else if (tool.type === "feature") {
+                    const key2 = tool.value; // "casa" | "strada"
+                    next = { ...current, features: { ...current.features, [key2]: !current.features[key2] } };
+                } else if (tool.type === "erase") next = { terrain: "pianura", features: {} };
                 else return prev;
                 return { ...prev, [key]: next };
             });

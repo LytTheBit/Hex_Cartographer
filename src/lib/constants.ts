@@ -28,6 +28,14 @@ export const VISUAL_ZOOM_MIN = 0.001;
 export const VISUAL_ZOOM_MAX = 200;
 export const VISUAL_ZOOM_STEP = 1.25; // fattore moltiplicativo per click sui pulsanti +/-
 
+// Dimensione minima (in pixel) a cui un esagono può essere disegnato. Il numero di esagoni
+// generati per riempire il canvas cresce come 1/hexSize² quando dezoomi: senza un limite,
+// dezoomare molto (specialmente con la rotella, a QUALSIASI layer) genera milioni di celle
+// e la pagina esaurisce la memoria. Sotto questa soglia il dezoom visivo smette di avere
+// effetto sul rendering (gli esagoni restano di questa dimensione), anche se lo zoom
+// "logico" può continuare a scendere (serve per la compensazione tra layer).
+export const MIN_HEX_SIZE_PX = 5;
+
 // Soglie per le icone di villaggio/città, come DENSITÀ (quota di celle Locale con una
 // casa) invece che conteggio assoluto: così funzionano correttamente a ogni livello di
 // aggregazione, non solo a quello per cui erano state tarate.

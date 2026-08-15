@@ -2,11 +2,12 @@ import { useMemo, useRef } from "react";
 import type { MouseEvent, PointerEvent, WheelEvent } from "react";
 import { Building, Building2, Home, Mountain, Trees, Waves } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { CITY_DENSITY_THRESHOLD, HEX_SIZE, RATIO, TERRAINS, VIEWPORT_PX, VILLAGE_DENSITY_THRESHOLD, WORLD_RADIUS } from "../../lib/constants";
+import { CITY_DENSITY_THRESHOLD, HEX_SIZE, MIN_HEX_SIZE_PX, RATIO, TERRAINS, VIEWPORT_PX, VILLAGE_DENSITY_THRESHOLD, WORLD_RADIUS } from "../../lib/constants";
 import { cubeDistance, generateHexRect, tileKey } from "../../lib/hex/grid";
 import { angleToEdge, axialToParent, axialToPixel, hexCorner, hexPoints, pixelToAxial } from "../../lib/hex/coordinates";
 import { aggregateMacroCell, type ClusterData } from "../../lib/hex/aggregation";
 import { computeRiverPaths } from "../../lib/hex/rivers";
+import { computeRoadPaths } from "../../lib/hex/roads";
 import { Icon } from "../icons/Icon";
 import type { AxialCoord, MapLevel, Tile, TerrainType, TileMap } from "../../types/map";
 import type { Tool } from "../../state/useMapState";
@@ -55,7 +56,9 @@ export function HexGrid({
   const wasDrag = useRef(false);
 
   const pixelBaseSize = HEX_SIZE * visualZoom;
-  const hexSize = pixelBaseSize * ratio;
+  // hexSize È CLAMPATO a un minimo: senza questo limite, dezoomare molto genera milioni di
+  // celle (vedi commento su MIN_HEX_SIZE_PX in constants.ts) e la pagina va in crash.
+  const hexSize = Math.max(MIN_HEX_SIZE_PX, pixelBaseSize * ratio);
 
   const [centerQ, centerR] = axialToParent(camera.q, camera.r, ratio);
 
@@ -81,6 +84,22 @@ export function HexGrid({
       () => (isLocale ? computeRiverPaths(cells, getTile, pixelBaseSize) : []),
       [isLocale, cells, getTile, pixelBaseSize]
   );
+
+  const roadPaths = useMemo(
+      () => (isLocale ? computeRoadPaths(cells, getTile, pixelBaseSize) : []),
+      [isLocale, cells, getTile, pixelBaseSize]
+  );
+
+  // "Ponte": un esagono con sia fiume che strada attivi -> segna l'incrocio.
+  const bridgePoints = useMemo(() => {
+    if (!isLocale) return [];
+    return cells
+        .filter(({ q, r }) => {
+          const t = getTile(q, r);
+          return (t.features.fiume?.length ?? 0) > 0 && t.features.strada;
+        })
+        .map(({ q, r }) => axialToPixel(q, r, pixelBaseSize));
+  }, [isLocale, cells, getTile, pixelBaseSize]);
 
   const clusterData = useMemo(() => {
     if (isLocale) return {} as Record<string, ClusterData>;
@@ -186,8 +205,14 @@ export function HexGrid({
             onWheel={handleWheel}
             className="hex-svg"
         >
+          {roadPaths.map((d, i) => (
+              <path key={`road-${i}`} d={d} fill="none" stroke="#c47a2c" strokeWidth={pixelBaseSize * 0.32} strokeLinecap="round" strokeLinejoin="round" />
+          ))}
           {riverPaths.map((d, i) => (
-              <path key={i} d={d} fill="none" stroke="#2f6fa8" strokeWidth={pixelBaseSize * 0.55} strokeLinecap="round" strokeLinejoin="round" />
+              <path key={`river-${i}`} d={d} fill="none" stroke="#2f6fa8" strokeWidth={pixelBaseSize * 0.55} strokeLinecap="round" strokeLinejoin="round" />
+          ))}
+          {bridgePoints.map(([bx, by], i) => (
+              <circle key={`bridge-${i}`} cx={bx} cy={by} r={pixelBaseSize * 0.32} fill="#c0392b" stroke="#7a231c" strokeWidth={pixelBaseSize * 0.06} />
           ))}
 
           {positions.map(({ q, r, x, y }) => {

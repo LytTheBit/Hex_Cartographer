@@ -19,13 +19,15 @@ export function generateHexRing(radius: number): AxialCoord[] {
  */
 export function generateHexRect(halfExtentPx: number, hexSize: number): AxialCoord[] {
   const cells: AxialCoord[] = [];
-  const padding = hexSize * 1.6;
+  const padding = hexSize * 1.6; // margine extra per gli esagoni parzialmente visibili ai bordi
   const limit = halfExtentPx + padding;
-  const qMax = Math.ceil(limit / (1.5 * hexSize)) + 1;
+  // Limite di sicurezza indipendente dal chiamante: anche se hexSize fosse ridicolmente
+  // piccolo, non si generano mai più di ~120 celle per lato (evita di esaurire la memoria).
+  const qMax = Math.min(120, Math.ceil(limit / (1.5 * hexSize)) + 1);
 
   for (let q = -qMax; q <= qMax; q++) {
     const rCenterOffset = -q / 2;
-    const rSpan = Math.ceil(limit / (hexSize * Math.sqrt(3))) + 2;
+    const rSpan = Math.min(120, Math.ceil(limit / (hexSize * Math.sqrt(3))) + 2);
     for (let r = Math.floor(rCenterOffset - rSpan); r <= Math.ceil(rCenterOffset + rSpan); r++) {
       const [x, y] = axialToPixel(q, r, hexSize);
       if (Math.abs(x) <= limit && Math.abs(y) <= limit) cells.push({ q, r });
