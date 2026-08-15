@@ -19,7 +19,7 @@ export function generateHexRing(radius: number): AxialCoord[] {
  */
 export function generateHexRect(halfExtentPx: number, hexSize: number): AxialCoord[] {
   const cells: AxialCoord[] = [];
-  const padding = hexSize * 1.6; // margine extra per gli esagoni parzialmente visibili ai bordi
+  const padding = hexSize * 1.6;
   const limit = halfExtentPx + padding;
   const qMax = Math.ceil(limit / (1.5 * hexSize)) + 1;
 
@@ -36,4 +36,9 @@ export function generateHexRect(halfExtentPx: number, hexSize: number): AxialCoo
 
 export function tileKey(q: number, r: number): string {
   return `${q},${r}`;
+}
+
+/** Distanza (in celle) di (q, r) dall'origine, su coordinate assiali. */
+export function cubeDistance(q: number, r: number): number {
+  return Math.max(Math.abs(q), Math.abs(r), Math.abs(-q - r));
 }

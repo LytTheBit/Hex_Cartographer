@@ -1,4 +1,4 @@
-import { Layers, Minus, Plus } from "lucide-react";
+import { Layers, Link2, Link2Off, Minus, Plus } from "lucide-react";
 import { LEVELS } from "../../lib/constants";
 import "./ZoomControls.css";
 
@@ -10,6 +10,8 @@ interface ZoomControlsProps {
     showOverlay: boolean;
     onToggleOverlay: () => void;
     canShowOverlay: boolean;
+    compensateOnLayerChange: boolean;
+    onToggleCompensate: () => void;
 }
 
 export function ZoomControls({
@@ -20,6 +22,8 @@ export function ZoomControls({
                                  showOverlay,
                                  onToggleOverlay,
                                  canShowOverlay,
+                                 compensateOnLayerChange,
+                                 onToggleCompensate,
                              }: ZoomControlsProps) {
     return (
         <div className="zoom-controls">
@@ -38,6 +42,17 @@ export function ZoomControls({
                         {lv}
                     </button>
                 ))}
+                <button
+                    className={compensateOnLayerChange ? "overlay-btn overlay-btn-active" : "overlay-btn"}
+                    onClick={onToggleCompensate}
+                    title={
+                        compensateOnLayerChange
+                            ? "Al cambio layer la dimensione apparente resta la stessa (clicca per disattivare)"
+                            : "Al cambio layer lo zoom visivo resta invariato, la dimensione apparente cambia (clicca per attivare)"
+                    }
+                >
+                    {compensateOnLayerChange ? <Link2 size={14} /> : <Link2Off size={14} />}
+                </button>
             </div>
 
             <div className="visual-zoom">

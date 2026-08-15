@@ -20,6 +20,8 @@ export default function App() {
         zoomVisualIn,
         zoomVisualOut,
         zoomVisualBy,
+        compensateOnLayerChange,
+        toggleCompensateOnLayerChange,
         showOverlay,
         setShowOverlay,
         getTile,
@@ -46,6 +48,8 @@ export default function App() {
                 showOverlay={showOverlay}
                 onToggleOverlay={() => setShowOverlay((v) => !v)}
                 canShowOverlay={level !== "globale"}
+                compensateOnLayerChange={compensateOnLayerChange}
+                onToggleCompensate={toggleCompensateOnLayerChange}
             />
 
             <Toolbar tool={tool} setTool={setTool} isLocale={isLocale} />

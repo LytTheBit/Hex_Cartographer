@@ -20,17 +20,16 @@ function clampVisualZoom(z: number): number {
 export function useMapState() {
     const [tilesStore, setTilesStore] = useState<TileMap>({});
     const [tool, setTool] = useState<Tool>({ type: "terrain", value: "pianura" });
-    const [zoomIndex, setZoomIndexState] = useState(0); // 0 = locale, 1 = regionale, 2 = globale
-    const [visualZoom, setVisualZoomState] = useState(1); // zoom "a schermo", indipendente dal layer
-    const [camera, setCamera] = useState<AxialCoord>({ q: 0, r: 0 }); // posizione, in coordinate Locale
+    const [zoomIndex, setZoomIndexState] = useState(0);
+    const [visualZoom, setVisualZoomState] = useState(1);
+    const [compensateOnLayerChange, setCompensateOnLayerChange] = useState(true);
+    const [camera, setCamera] = useState<AxialCoord>({ q: 0, r: 0 });
     const [showOverlay, setShowOverlay] = useState(false);
 
     const level: MapLevel = LEVELS[zoomIndex];
     const isLocale = level === "locale";
     const ratio = LEVEL_RATIOS[level];
 
-    // Se usciamo dal livello Locale mentre erano selezionati fiume/casa (richiedono precisione
-    // Locale), torniamo automaticamente allo strumento terreno per evitare click "muti".
     useEffect(() => {
         if (!isLocale && (tool.type === "river" || tool.type === "feature")) {
             setTool({ type: "terrain", value: "pianura" });
@@ -39,23 +38,30 @@ export function useMapState() {
     }, [isLocale]);
 
     /**
-     * Cambia layer di grandezza (0=Locale, 1=Regionale, 2=Globale). Compensa lo zoom visivo
-     * per il salto di `ratio` tra i due layer, così la dimensione APPARENTE degli esagoni
-     * resta la stessa subito dopo il cambio — niente più "un solo esagono enorme" su
-     * Globale, niente più zoom che sembra "resettarsi" ogni volta che cambi layer.
+     * Cambia layer di grandezza (0=Locale, 1=Regionale, 2=Globale). Se `compensateOnLayerChange`
+     * è attivo (default), compensa lo zoom visivo per il salto di `ratio` tra i due layer, così
+     * la dimensione APPARENTE degli esagoni resta la stessa subito dopo il cambio — l'esagono
+     * Regionale in cui entri appare grande esattamente quanto la sua anteprima nell'overlay a
+     * livello Locale. Disattivabile con toggleCompensateOnLayerChange, se preferisci che lo
+     * zoom visivo resti invariato (e quindi la dimensione apparente cambi) al cambio layer.
      */
     const setLayer = useCallback(
         (index: number) => {
             const clamped = Math.min(LEVELS.length - 1, Math.max(0, index));
-            const oldRatio = LEVEL_RATIOS[level];
-            const newRatio = LEVEL_RATIOS[LEVELS[clamped]];
-            setVisualZoomState((z) => clampVisualZoom((z * oldRatio) / newRatio));
+            if (compensateOnLayerChange) {
+                const oldRatio = LEVEL_RATIOS[level];
+                const newRatio = LEVEL_RATIOS[LEVELS[clamped]];
+                setVisualZoomState((z) => clampVisualZoom((z * oldRatio) / newRatio));
+            }
             setZoomIndexState(clamped);
         },
-        [level]
+        [level, compensateOnLayerChange]
     );
 
-    /** Zoom VISIVO: scala continua indipendente dal layer, moltiplica per `factor`. */
+    const toggleCompensateOnLayerChange = useCallback(() => {
+        setCompensateOnLayerChange((v) => !v);
+    }, []);
+
     const zoomVisualBy = useCallback((factor: number) => {
         setVisualZoomState((z) => clampVisualZoom(z * factor));
     }, []);
@@ -63,7 +69,6 @@ export function useMapState() {
     const zoomVisualIn = useCallback(() => zoomVisualBy(VISUAL_ZOOM_STEP), [zoomVisualBy]);
     const zoomVisualOut = useCallback(() => zoomVisualBy(1 / VISUAL_ZOOM_STEP), [zoomVisualBy]);
 
-    /** Sposta la telecamera di (dq, dr), sempre in coordinate Locale (indipendente dallo zoom). */
     const panBy = useCallback((dq: number, dr: number) => {
         setCamera((prev) => ({ q: prev.q + dq, r: prev.r + dr }));
     }, []);
@@ -73,7 +78,6 @@ export function useMapState() {
         [tilesStore]
     );
 
-    /** Dipinge una singola cella Locale: terreno, casa o gomma. */
     const paintLocale = useCallback(
         (q: number, r: number) => {
             const key = tileKey(q, r);
@@ -83,17 +87,16 @@ export function useMapState() {
                 if (tool.type === "terrain") next = { ...current, terrain: tool.value };
                 else if (tool.type === "feature") next = { ...current, features: { ...current.features, casa: !current.features.casa } };
                 else if (tool.type === "erase") next = { terrain: "pianura", features: {} };
-                else return prev; // tool "river": gestito da toggleRiverEdge
+                else return prev;
                 return { ...prev, [key]: next };
             });
         },
         [tool]
     );
 
-    /** Dipinge in blocco tutte le celle Locale sotto una macro-cella (Regionale/Globale). */
     const paintMacro = useCallback(
         (Q: number, R: number, macroRatio: number) => {
-            if (tool.type !== "terrain" && tool.type !== "erase") return; // fiume/casa richiedono lo zoom Locale
+            if (tool.type !== "terrain" && tool.type !== "erase") return;
             const children = getMacroChildren(Q, R, macroRatio);
             setTilesStore((prev) => {
                 const next = { ...prev };
@@ -108,7 +111,6 @@ export function useMapState() {
         [tool]
     );
 
-    /** Click su una cella visibile: interpretato in base al livello di zoom corrente. */
     const handleCellClick = useCallback(
         (q: number, r: number) => {
             if (isLocale) paintLocale(q, r);
@@ -117,7 +119,6 @@ export function useMapState() {
         [isLocale, ratio, paintLocale, paintMacro]
     );
 
-    /** Attiva/disattiva un segmento di fiume, sincronizzando sempre il lato speculare del vicino. */
     const toggleRiverEdge = useCallback(
         (q: number, r: number, edge: number) => {
             if (!isLocale) return;
@@ -157,6 +158,8 @@ export function useMapState() {
         zoomVisualIn,
         zoomVisualOut,
         zoomVisualBy,
+        compensateOnLayerChange,
+        toggleCompensateOnLayerChange,
         showOverlay,
         setShowOverlay,
         getTile,

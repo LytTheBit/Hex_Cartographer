@@ -2,9 +2,9 @@ import { useMemo, useRef } from "react";
 import type { MouseEvent, PointerEvent, WheelEvent } from "react";
 import { Building, Building2, Home, Mountain, Trees, Waves } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { CITY_DENSITY_THRESHOLD, HEX_SIZE, RATIO, TERRAINS, VIEWPORT_PX, VILLAGE_DENSITY_THRESHOLD } from "../../lib/constants";
-import { generateHexRect, tileKey } from "../../lib/hex/grid";
-import { angleToEdge, axialToParent, axialToPixel, hexPoints, pixelToAxial } from "../../lib/hex/coordinates";
+import { CITY_DENSITY_THRESHOLD, HEX_SIZE, RATIO, TERRAINS, VIEWPORT_PX, VILLAGE_DENSITY_THRESHOLD, WORLD_RADIUS } from "../../lib/constants";
+import { cubeDistance, generateHexRect, tileKey } from "../../lib/hex/grid";
+import { angleToEdge, axialToParent, axialToPixel, hexCorner, hexPoints, pixelToAxial } from "../../lib/hex/coordinates";
 import { aggregateMacroCell, type ClusterData } from "../../lib/hex/aggregation";
 import { computeRiverPaths } from "../../lib/hex/rivers";
 import { Icon } from "../icons/Icon";
@@ -91,18 +91,30 @@ export function HexGrid({
     return result;
   }, [isLocale, cells, ratio, tilesStore]);
 
-  const overlayCells = useMemo(() => {
+  const overlaySegments = useMemo(() => {
     if (!showOverlay || level === "globale") return [];
-    const seen = new Set<string>();
-    const result: Array<[number, number]> = [];
+    const macroCenters = new Map<string, [number, number]>();
     cells.forEach(({ q, r }) => {
       const [Q, R] = axialToParent(q, r, RATIO);
       const key = tileKey(Q, R);
-      if (seen.has(key)) return;
-      seen.add(key);
-      result.push(axialToPixel(Q, R, hexSize * RATIO));
+      if (!macroCenters.has(key)) macroCenters.set(key, axialToPixel(Q, R, hexSize * RATIO));
     });
-    return result;
+
+    const seenEdges = new Set<string>();
+    const segments: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
+    macroCenters.forEach(([cx, cy]) => {
+      for (let i = 0; i < 6; i++) {
+        const [x1, y1] = hexCorner(cx, cy, hexSize * RATIO - 1, i);
+        const [x2, y2] = hexCorner(cx, cy, hexSize * RATIO - 1, (i + 1) % 6);
+        const a = `${Math.round(x1)},${Math.round(y1)}`;
+        const b = `${Math.round(x2)},${Math.round(y2)}`;
+        const edgeKey = a < b ? `${a}|${b}` : `${b}|${a}`;
+        if (seenEdges.has(edgeKey)) continue;
+        seenEdges.add(edgeKey);
+        segments.push({ x1, y1, x2, y2 });
+      }
+    });
+    return segments;
   }, [showOverlay, level, cells, hexSize]);
 
   const toSvgPoint = (clientX: number, clientY: number): { x: number; y: number } => {
@@ -191,6 +203,9 @@ export function HexGrid({
             };
 
             if (isLocale) {
+              if (cubeDistance(q, r) > WORLD_RADIUS) {
+                return <polygon key={key} points={hexPoints(x, y, hexSize - 1)} fill="#11141a" stroke="#2a2f37" strokeWidth={0.6} />;
+              }
               const tile = getTile(q, r);
               const color = TERRAINS[tile.terrain].color;
               const TerrainIconComp = TERRAIN_ICONS[tile.terrain];
@@ -207,6 +222,9 @@ export function HexGrid({
               );
             }
 
+            if (cubeDistance(q * ratio, r * ratio) > WORLD_RADIUS) {
+              return <polygon key={key} points={hexPoints(x, y, hexSize - 1)} fill="#11141a" stroke="#2a2f37" strokeWidth={0.8} />;
+            }
             const data = clusterData[key];
             const color = TERRAINS[data.terrain].color;
             const TerrainIconComp = TERRAIN_ICONS[data.terrain];
@@ -226,14 +244,17 @@ export function HexGrid({
             );
           })}
 
-          {overlayCells.map(([x, y], i) => (
-              <polygon
+          {overlaySegments.map((s, i) => (
+              <line
                   key={`overlay-${i}`}
-                  points={hexPoints(x, y, hexSize * RATIO - 1)}
-                  fill="none"
+                  x1={s.x1}
+                  y1={s.y1}
+                  x2={s.x2}
+                  y2={s.y2}
                   stroke="#c9a227"
                   strokeWidth={pixelBaseSize * 0.12}
                   strokeDasharray={`${pixelBaseSize * 0.3} ${pixelBaseSize * 0.2}`}
+                  strokeLinecap="round"
                   pointerEvents="none"
               />
           ))}

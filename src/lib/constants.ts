@@ -34,6 +34,12 @@ export const VISUAL_ZOOM_STEP = 1.25; // fattore moltiplicativo per click sui pu
 export const VILLAGE_DENSITY_THRESHOLD = 0.08; // 8%
 export const CITY_DENSITY_THRESHOLD = 0.12; // 12%
 
+// Raggio del "mondo" (in celle Locale, distanza cubica dall'origine). Oltre questo limite
+// la mappa non esiste: le celle vengono mostrate come area vuota invece che come terreno,
+// così è chiaro se hai raggiunto il bordo della mappa invece che un rallentamento.
+// Modificabile: aumentalo se ti serve una mappa più grande.
+export const WORLD_RADIUS = 600;
+
 export const TERRAINS: Record<TerrainType, { label: string; color: string }> = {
   pianura: { label: "Pianura", color: "#c9cf7a" },
   foresta: { label: "Foresta", color: "#4f7942" },
