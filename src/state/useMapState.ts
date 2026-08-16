@@ -37,14 +37,6 @@ export function useMapState() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isLocale]);
 
-    /**
-     * Cambia layer di grandezza (0=Locale, 1=Regionale, 2=Globale). Se `compensateOnLayerChange`
-     * è attivo (default), compensa lo zoom visivo per il salto di `ratio` tra i due layer, così
-     * la dimensione APPARENTE degli esagoni resta la stessa subito dopo il cambio — l'esagono
-     * Regionale in cui entri appare grande esattamente quanto la sua anteprima nell'overlay a
-     * livello Locale. Disattivabile con toggleCompensateOnLayerChange, se preferisci che lo
-     * zoom visivo resti invariato (e quindi la dimensione apparente cambi) al cambio layer.
-     */
     const setLayer = useCallback(
         (index: number) => {
             const clamped = Math.min(LEVELS.length - 1, Math.max(0, index));
@@ -85,10 +77,8 @@ export function useMapState() {
                 const current = prev[key] ?? DEFAULT_TILE;
                 let next: Tile;
                 if (tool.type === "terrain") next = { ...current, terrain: tool.value };
-                else if (tool.type === "feature") {
-                    const key2 = tool.value; // "casa" | "strada"
-                    next = { ...current, features: { ...current.features, [key2]: !current.features[key2] } };
-                } else if (tool.type === "erase") next = { terrain: "pianura", features: {} };
+                else if (tool.type === "feature") next = { ...current, features: { ...current.features, [tool.value]: true } };
+                else if (tool.type === "erase") next = { terrain: "pianura", features: {} };
                 else return prev;
                 return { ...prev, [key]: next };
             });
@@ -121,7 +111,7 @@ export function useMapState() {
         [isLocale, ratio, paintLocale, paintMacro]
     );
 
-    const toggleRiverEdge = useCallback(
+    const setRiverEdge = useCallback(
         (q: number, r: number, edge: number) => {
             if (!isLocale) return;
             const dir = EDGE_DIRECTIONS[edge];
@@ -130,20 +120,34 @@ export function useMapState() {
             const oppEdge = oppositeEdge(edge);
 
             setTilesStore((prev) => {
-                const toggled = (map: TileMap, tq: number, tr: number, e: number): TileMap => {
+                const setEdge = (map: TileMap, tq: number, tr: number, e: number): TileMap => {
                     const key = tileKey(tq, tr);
                     const tile = map[key] ?? DEFAULT_TILE;
                     const edges = tile.features.fiume ?? [];
-                    const nextEdges = edges.includes(e) ? edges.filter((x) => x !== e) : [...edges, e];
-                    return { ...map, [key]: { ...tile, features: { ...tile.features, fiume: nextEdges } } };
+                    if (edges.includes(e)) return map;
+                    return { ...map, [key]: { ...tile, features: { ...tile.features, fiume: [...edges, e] } } };
                 };
-                let next = toggled(prev, q, r, edge);
-                next = toggled(next, nq, nr, oppEdge);
+                let next = setEdge(prev, q, r, edge);
+                next = setEdge(next, nq, nr, oppEdge);
                 return next;
             });
         },
         [isLocale]
     );
+
+    const exportMap = useCallback((): string => JSON.stringify({ version: 1, tiles: tilesStore }, null, 2), [tilesStore]);
+
+    const importMap = useCallback((json: string): boolean => {
+        try {
+            const parsed = JSON.parse(json);
+            const tiles = parsed?.tiles;
+            if (!tiles || typeof tiles !== "object") return false;
+            setTilesStore(tiles as TileMap);
+            return true;
+        } catch {
+            return false;
+        }
+    }, []);
 
     return {
         tilesStore,
@@ -166,6 +170,8 @@ export function useMapState() {
         setShowOverlay,
         getTile,
         handleCellClick,
-        toggleRiverEdge,
+        setRiverEdge,
+        exportMap,
+        importMap,
     };
 }

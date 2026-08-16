@@ -7,17 +7,17 @@ interface Point {
 }
 
 /**
- * I fiumi come CURVE UNICHE per l'intero corso, non più una curva indipendente per ogni
- * esagono. Un fiume "spezzato in curve locali" resta comunque con una direzione diversa a
- * ogni confine tra esagoni (continuo nella posizione, ma non nella tangente). Qui invece:
+ * Rivers as a SINGLE curve per whole course, not one independent curve per hex. A river
+ * "split into local curves" stays continuous in position but changes direction sharply at
+ * every hex boundary (still visually "broken"). Instead, here:
  *
- * 1. Si costruisce un grafo: un nodo "centro" per ogni esagono con almeno un lato-fiume, un
- *    nodo "punto medio" per ogni lato attivo (condiviso dai due esagoni adiacenti).
- * 2. Si percorrono le catene di nodi (dai punti di sorgente/foce o dalle confluenze, che
- *    fanno da estremi, attraverso gli esagoni "di passaggio" con esattamente 2 lati attivi).
- * 3. Ogni catena di punti risultante viene trasformata in un'UNICA curva liscia con lo
- *    schema Catmull-Rom (convertito in Bézier cubiche per l'SVG): la tangente in ogni punto
- *    tiene conto dei punti vicini lungo TUTTO il corso, non solo del singolo esagono.
+ * 1. Build a graph: a "center" node for every hex with at least one river side, a "midpoint"
+ *    node for every active side (shared by the two adjacent hexes).
+ * 2. Walk the chains of nodes (from sources/mouths or confluences, which act as endpoints,
+ *    through "pass-through" hexes with exactly 2 active sides).
+ * 3. Each resulting chain of points is turned into a SINGLE smooth curve using Catmull-Rom
+ *    (converted to cubic Béziers for SVG): the tangent at every point accounts for the
+ *    neighboring points along the WHOLE course, not just the single hex.
  */
 export function computeRiverPaths(cells: AxialCoord[], getTile: (q: number, r: number) => Tile, hexSize: number): string[] {
   interface CenterNode {

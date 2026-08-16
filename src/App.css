@@ -21,6 +21,14 @@
   margin-bottom: 24px;
 }
 
+.app-toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
 .app-hint {
   font-size: 12px;
   color: #a89f8a;

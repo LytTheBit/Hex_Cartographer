@@ -1,7 +1,6 @@
 import type { AxialCoord } from "../../types/map";
 import { axialToPixel } from "./coordinates";
 
-/** Genera tutte le celle di una griglia esagonale a forma di esagono di raggio `radius`. */
 export function generateHexRing(radius: number): AxialCoord[] {
   const cells: AxialCoord[] = [];
   for (let q = -radius; q <= radius; q++) {
@@ -12,17 +11,10 @@ export function generateHexRing(radius: number): AxialCoord[] {
   return cells;
 }
 
-/**
- * Genera tutte le celle il cui centro (in pixel, a dimensione `hexSize`) rientra in un
- * quadrato di lato `2 * halfExtentPx` centrato sull'origine — usata per riempire un canvas
- * RETTANGOLARE di esagoni, invece della forma esagonale di generateHexRing.
- */
 export function generateHexRect(halfExtentPx: number, hexSize: number): AxialCoord[] {
   const cells: AxialCoord[] = [];
-  const padding = hexSize * 1.6; // margine extra per gli esagoni parzialmente visibili ai bordi
+  const padding = hexSize * 1.6;
   const limit = halfExtentPx + padding;
-  // Limite di sicurezza indipendente dal chiamante: anche se hexSize fosse ridicolmente
-  // piccolo, non si generano mai più di ~120 celle per lato (evita di esaurire la memoria).
   const qMax = Math.min(120, Math.ceil(limit / (1.5 * hexSize)) + 1);
 
   for (let q = -qMax; q <= qMax; q++) {
@@ -40,7 +32,6 @@ export function tileKey(q: number, r: number): string {
   return `${q},${r}`;
 }
 
-/** Distanza (in celle) di (q, r) dall'origine, su coordinate assiali. */
 export function cubeDistance(q: number, r: number): number {
   return Math.max(Math.abs(q), Math.abs(r), Math.abs(-q - r));
 }

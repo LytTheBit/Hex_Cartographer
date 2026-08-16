@@ -7,13 +7,6 @@ interface Point {
     y: number;
 }
 
-/**
- * Le strade, a differenza dei fiumi, passano per il CENTRO di ogni esagono (non per i
- * lati): non serve scegliere un lato, basta un interruttore per esagono. Due esagoni
- * adiacenti con strada attiva sono automaticamente collegati. Stessa idea dei fiumi per la
- * resa grafica: si tracciano le catene di esagoni consecutivi e si trasformano in un'unica
- * curva liscia (Catmull-Rom) — qui però i "nodi" del grafo sono solo i centri.
- */
 export function computeRoadPaths(cells: AxialCoord[], getTile: (q: number, r: number) => Tile, hexSize: number): string[] {
     const roadCells = new Set(cells.filter(({ q, r }) => getTile(q, r).features.strada).map(({ q, r }) => tileKey(q, r)));
 

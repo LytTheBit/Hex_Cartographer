@@ -1,6 +1,7 @@
 import { useMapState } from "./state/useMapState";
 import { Toolbar } from "./components/Toolbar/Toolbar";
 import { ZoomControls } from "./components/Toolbar/ZoomControls";
+import { SaveLoadControls } from "./components/Toolbar/SaveLoadControls";
 import { HexGrid } from "./components/HexGrid/HexGrid";
 import "./App.css";
 
@@ -26,31 +27,36 @@ export default function App() {
         setShowOverlay,
         getTile,
         handleCellClick,
-        toggleRiverEdge,
+        setRiverEdge,
+        exportMap,
+        importMap,
     } = useMapState();
 
     const hint = !isLocale
-        ? "Clicca un esagono per dipingere il terreno di tutta l'area sottostante. Trascina per spostarti, rotella per lo zoom visivo."
+        ? "Left-click (or drag) to paint the terrain of the whole area below. Right-drag to pan, wheel to zoom."
         : tool.type === "river"
-            ? "Clicca vicino al lato di un esagono per tracciare un segmento di fiume in quella direzione."
-            : "Dipingi terreni e piazza case. Trascina per spostarti, rotella per lo zoom visivo.";
+            ? "Left-click near a hex's side to start a river; keep dragging to extend it."
+            : "Paint terrain and place houses/roads; drag to paint several hexes at once. Right-drag to pan, wheel to zoom.";
 
     return (
         <div className="app">
             <h1 className="app-title">Cartografo</h1>
             <p className="app-subtitle">Editor di mappe esagonali</p>
 
-            <ZoomControls
-                zoomIndex={zoomIndex}
-                onSetLayer={setLayer}
-                onZoomVisualIn={zoomVisualIn}
-                onZoomVisualOut={zoomVisualOut}
-                showOverlay={showOverlay}
-                onToggleOverlay={() => setShowOverlay((v) => !v)}
-                canShowOverlay={level !== "globale"}
-                compensateOnLayerChange={compensateOnLayerChange}
-                onToggleCompensate={toggleCompensateOnLayerChange}
-            />
+            <div className="app-toolbar-row">
+                <ZoomControls
+                    zoomIndex={zoomIndex}
+                    onSetLayer={setLayer}
+                    onZoomVisualIn={zoomVisualIn}
+                    onZoomVisualOut={zoomVisualOut}
+                    showOverlay={showOverlay}
+                    onToggleOverlay={() => setShowOverlay((v) => !v)}
+                    canShowOverlay={level !== "globale"}
+                    compensateOnLayerChange={compensateOnLayerChange}
+                    onToggleCompensate={toggleCompensateOnLayerChange}
+                />
+                <SaveLoadControls onExport={exportMap} onImport={importMap} />
+            </div>
 
             <Toolbar tool={tool} setTool={setTool} isLocale={isLocale} />
 
@@ -64,7 +70,7 @@ export default function App() {
                 tool={tool}
                 showOverlay={showOverlay}
                 onCellClick={handleCellClick}
-                onRiverEdge={toggleRiverEdge}
+                onRiverEdge={setRiverEdge}
                 onPanBy={panBy}
                 onZoomVisualBy={zoomVisualBy}
             />

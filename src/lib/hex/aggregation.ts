@@ -5,21 +5,13 @@ import { generateHexRing, tileKey } from "./grid";
 export interface ClusterData {
   terrain: TerrainType;
   houseCount: number;
-  /** Quota (0-1) di celle Locale con una casa: usata per le icone villaggio/città, che
-   * così funzionano correttamente a qualsiasi livello di aggregazione. */
   houseDensity: number;
   riverCount: number;
 }
 
-const DEFAULT_TILE: Tile = { terrain: "pianura", features: {} };
 const DEFAULT_CLUSTER: ClusterData = { terrain: "pianura", houseCount: 0, houseDensity: 0, riverCount: 0 };
 
-/**
- * Tutte le celle Locale che appartengono alla macro-cella (Q, R) a un dato rapporto.
- * Genera un intorno abbondante in coordinate Locale attorno al centro approssimato della
- * macro-cella, poi tiene solo quelle che vi appartengono davvero (stesso arrotondamento
- * usato per la visualizzazione, quindi il risultato è sempre coerente).
- */
+/** Used ONLY for bulk painting (paintMacro). Do NOT use for reading/aggregating during rendering. */
 export function getMacroChildren(Q: number, R: number, ratio: number): AxialCoord[] {
   if (ratio <= 1) return [{ q: Q, r: R }];
   const approxQ = Q * ratio;
@@ -32,23 +24,43 @@ export function getMacroChildren(Q: number, R: number, ratio: number): AxialCoor
       });
 }
 
+export function macroChildCount(ratio: number): number {
+  return ratio * ratio;
+}
+
 function dominantTerrain(counts: Partial<Record<TerrainType, number>>): TerrainType {
   return (Object.entries(counts).sort((a, b) => b[1]! - a[1]!)[0]?.[0] ?? "pianura") as TerrainType;
 }
 
-/** Dati aggregati (terreno dominante, case, fiumi) della macro-cella (Q, R) a un dato rapporto. */
-export function aggregateMacroCell(Q: number, R: number, ratio: number, tilesStore: TileMap): ClusterData {
-  const children = getMacroChildren(Q, R, ratio);
-  if (children.length === 0) return DEFAULT_CLUSTER;
+export function bucketPaintedTilesByMacro(tilesStore: TileMap, ratio: number): Map<string, Tile[]> {
+  const buckets = new Map<string, Tile[]>();
+  Object.entries(tilesStore).forEach(([key, tile]) => {
+    const [q, r] = key.split(",").map(Number);
+    const [Q, R] = axialToParent(q, r, ratio);
+    const macroKey = tileKey(Q, R);
+    const list = buckets.get(macroKey);
+    if (list) list.push(tile);
+    else buckets.set(macroKey, [tile]);
+  });
+  return buckets;
+}
 
+export function aggregateMacroCellFast(macroKey: string, ratio: number, buckets: Map<string, Tile[]>): ClusterData {
+  const painted = buckets.get(macroKey);
+  if (!painted || painted.length === 0) return DEFAULT_CLUSTER;
+
+  const totalChildren = macroChildCount(ratio);
   const counts: Partial<Record<TerrainType, number>> = {};
   let houseCount = 0;
   let riverCount = 0;
-  children.forEach(({ q, r }) => {
-    const tile = tilesStore[tileKey(q, r)] ?? DEFAULT_TILE;
+  painted.forEach((tile) => {
     counts[tile.terrain] = (counts[tile.terrain] ?? 0) + 1;
     if (tile.features.casa) houseCount++;
     if (tile.features.fiume && tile.features.fiume.length > 0) riverCount++;
   });
-  return { terrain: dominantTerrain(counts), houseCount, houseDensity: houseCount / children.length, riverCount };
+
+  const implicitDefault = totalChildren - painted.length;
+  if (implicitDefault > 0) counts.pianura = (counts.pianura ?? 0) + implicitDefault;
+
+  return { terrain: dominantTerrain(counts), houseCount, houseDensity: houseCount / totalChildren, riverCount };
 }

@@ -1,11 +1,11 @@
 import { useMemo, useRef } from "react";
-import type { MouseEvent, PointerEvent, WheelEvent } from "react";
+import type { PointerEvent, WheelEvent } from "react";
 import { Building, Building2, Home, Mountain, Trees, Waves } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { CITY_DENSITY_THRESHOLD, HEX_SIZE, MIN_HEX_SIZE_PX, RATIO, TERRAINS, VIEWPORT_PX, VILLAGE_DENSITY_THRESHOLD, WORLD_RADIUS } from "../../lib/constants";
 import { cubeDistance, generateHexRect, tileKey } from "../../lib/hex/grid";
-import { angleToEdge, axialToParent, axialToPixel, hexCorner, hexPoints, pixelToAxial } from "../../lib/hex/coordinates";
-import { aggregateMacroCell, type ClusterData } from "../../lib/hex/aggregation";
+import { angleToEdge, axialRound, axialToParent, axialToPixel, EDGE_DIRECTIONS, hexCorner, hexPoints, pixelToAxial } from "../../lib/hex/coordinates";
+import { aggregateMacroCellFast, bucketPaintedTilesByMacro, type ClusterData } from "../../lib/hex/aggregation";
 import { computeRiverPaths } from "../../lib/hex/rivers";
 import { computeRoadPaths } from "../../lib/hex/roads";
 import { Icon } from "../icons/Icon";
@@ -34,7 +34,9 @@ interface HexGridProps {
   onZoomVisualBy: (factor: number) => void;
 }
 
-const DRAG_THRESHOLD_PX = 4;
+type DragState =
+    | { mode: "pan"; pointerId: number; lastX: number; lastY: number }
+    | { mode: "paint"; pointerId: number; lastKey: string; lastQ: number; lastR: number };
 
 export function HexGrid({
                           level,
@@ -52,13 +54,11 @@ export function HexGrid({
                         }: HexGridProps) {
   const isLocale = level === "locale";
   const svgRef = useRef<SVGSVGElement>(null);
-  const dragState = useRef<{ lastX: number; lastY: number; moved: boolean; pointerId: number } | null>(null);
-  const wasDrag = useRef(false);
+  const dragState = useRef<DragState | null>(null);
 
   const pixelBaseSize = HEX_SIZE * visualZoom;
-  // hexSize È CLAMPATO a un minimo: senza questo limite, dezoomare molto genera milioni di
-  // celle (vedi commento su MIN_HEX_SIZE_PX in constants.ts) e la pagina va in crash.
   const hexSize = Math.max(MIN_HEX_SIZE_PX, pixelBaseSize * ratio);
+  const clampedPixelBaseSize = hexSize / ratio;
 
   const [centerQ, centerR] = axialToParent(camera.q, camera.r, ratio);
 
@@ -76,21 +76,20 @@ export function HexGrid({
       [cells, hexSize]
   );
 
-  const [cameraPixelX, cameraPixelY] = axialToPixel(camera.q, camera.r, pixelBaseSize);
+  const [cameraPixelX, cameraPixelY] = axialToPixel(camera.q, camera.r, clampedPixelBaseSize);
   const minX = cameraPixelX - VIEWPORT_PX / 2;
   const minY = cameraPixelY - VIEWPORT_PX / 2;
 
   const riverPaths = useMemo(
-      () => (isLocale ? computeRiverPaths(cells, getTile, pixelBaseSize) : []),
-      [isLocale, cells, getTile, pixelBaseSize]
+      () => (isLocale ? computeRiverPaths(cells, getTile, clampedPixelBaseSize) : []),
+      [isLocale, cells, getTile, clampedPixelBaseSize]
   );
 
   const roadPaths = useMemo(
-      () => (isLocale ? computeRoadPaths(cells, getTile, pixelBaseSize) : []),
-      [isLocale, cells, getTile, pixelBaseSize]
+      () => (isLocale ? computeRoadPaths(cells, getTile, clampedPixelBaseSize) : []),
+      [isLocale, cells, getTile, clampedPixelBaseSize]
   );
 
-  // "Ponte": un esagono con sia fiume che strada attivi -> segna l'incrocio.
   const bridgePoints = useMemo(() => {
     if (!isLocale) return [];
     return cells
@@ -98,14 +97,16 @@ export function HexGrid({
           const t = getTile(q, r);
           return (t.features.fiume?.length ?? 0) > 0 && t.features.strada;
         })
-        .map(({ q, r }) => axialToPixel(q, r, pixelBaseSize));
-  }, [isLocale, cells, getTile, pixelBaseSize]);
+        .map(({ q, r }) => axialToPixel(q, r, clampedPixelBaseSize));
+  }, [isLocale, cells, getTile, clampedPixelBaseSize]);
 
   const clusterData = useMemo(() => {
     if (isLocale) return {} as Record<string, ClusterData>;
+    const buckets = bucketPaintedTilesByMacro(tilesStore, ratio);
     const result: Record<string, ClusterData> = {};
     cells.forEach(({ q, r }) => {
-      result[tileKey(q, r)] = aggregateMacroCell(q, r, ratio, tilesStore);
+      const key = tileKey(q, r);
+      result[key] = aggregateMacroCellFast(key, ratio, buckets);
     });
     return result;
   }, [isLocale, cells, ratio, tilesStore]);
@@ -148,41 +149,76 @@ export function HexGrid({
     return { x: local.x, y: local.y };
   };
 
-  const edgeFromClick = (event: MouseEvent, cx: number, cy: number): number => {
-    const { x, y } = toSvgPoint(event.clientX, event.clientY);
+  const hexAtSvgPoint = (x: number, y: number): { q: number; r: number } => {
+    const qf = x / (1.5 * hexSize);
+    const rf = y / (hexSize * Math.sqrt(3)) - qf / 2;
+    const [q, r] = axialRound(qf, rf);
+    return { q, r };
+  };
+
+  const edgeFromCenter = (x: number, y: number, cx: number, cy: number): number => {
     const angleDeg = (Math.atan2(y - cy, x - cx) * 180) / Math.PI;
     return angleToEdge(angleDeg);
   };
 
+  const applyPaint = (q: number, r: number, svgX: number, svgY: number, fromCell: { q: number; r: number } | null) => {
+    if (isLocale && tool.type === "river") {
+      if (fromCell) {
+        const dq = q - fromCell.q;
+        const dr = r - fromCell.r;
+        const edgeIdx = EDGE_DIRECTIONS.findIndex((d) => d.q === dq && d.r === dr);
+        if (edgeIdx !== -1) onRiverEdge(fromCell.q, fromCell.r, edgeIdx);
+        return;
+      }
+      const [cx, cy] = axialToPixel(q, r, hexSize);
+      onRiverEdge(q, r, edgeFromCenter(svgX, svgY, cx, cy));
+      return;
+    }
+    onCellClick(q, r);
+  };
+
   const handlePointerDown = (event: PointerEvent<SVGSVGElement>) => {
-    dragState.current = { lastX: event.clientX, lastY: event.clientY, moved: false, pointerId: event.pointerId };
+    if (event.button === 2) {
+      dragState.current = { mode: "pan", pointerId: event.pointerId, lastX: event.clientX, lastY: event.clientY };
+      svgRef.current?.setPointerCapture(event.pointerId);
+      return;
+    }
+    if (event.button !== 0) return;
+
+    const { x, y } = toSvgPoint(event.clientX, event.clientY);
+    const { q, r } = hexAtSvgPoint(x, y);
+    dragState.current = { mode: "paint", pointerId: event.pointerId, lastKey: tileKey(q, r), lastQ: q, lastR: r };
+    svgRef.current?.setPointerCapture(event.pointerId);
+    applyPaint(q, r, x, y, null);
   };
 
   const handlePointerMove = (event: PointerEvent<SVGSVGElement>) => {
     const drag = dragState.current;
     if (!drag) return;
-    const dxScreen = event.clientX - drag.lastX;
-    const dyScreen = event.clientY - drag.lastY;
 
-    if (!drag.moved && (Math.abs(dxScreen) > DRAG_THRESHOLD_PX || Math.abs(dyScreen) > DRAG_THRESHOLD_PX)) {
-      drag.moved = true;
-      svgRef.current?.setPointerCapture(drag.pointerId);
+    if (drag.mode === "pan") {
+      const start = toSvgPoint(drag.lastX, drag.lastY);
+      const current = toSvgPoint(event.clientX, event.clientY);
+      const [dq, dr] = pixelToAxial(current.x - start.x, current.y - start.y, clampedPixelBaseSize);
+      onPanBy(-dq, -dr);
+      drag.lastX = event.clientX;
+      drag.lastY = event.clientY;
+      return;
     }
-    if (!drag.moved) return;
 
-    const start = toSvgPoint(drag.lastX, drag.lastY);
-    const current = toSvgPoint(event.clientX, event.clientY);
-    const [dq, dr] = pixelToAxial(current.x - start.x, current.y - start.y, pixelBaseSize);
-    onPanBy(-dq, -dr);
-
-    drag.lastX = event.clientX;
-    drag.lastY = event.clientY;
+    const { x, y } = toSvgPoint(event.clientX, event.clientY);
+    const { q, r } = hexAtSvgPoint(x, y);
+    const key = tileKey(q, r);
+    if (key !== drag.lastKey) {
+      applyPaint(q, r, x, y, { q: drag.lastQ, r: drag.lastR });
+      drag.lastKey = key;
+      drag.lastQ = q;
+      drag.lastR = r;
+    }
   };
 
   const handlePointerUp = (event: PointerEvent<SVGSVGElement>) => {
-    const drag = dragState.current;
-    if (drag?.moved) svgRef.current?.releasePointerCapture(event.pointerId);
-    wasDrag.current = drag?.moved ?? false;
+    if (dragState.current) svgRef.current?.releasePointerCapture(event.pointerId);
     dragState.current = null;
   };
 
@@ -203,29 +239,21 @@ export function HexGrid({
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
             onWheel={handleWheel}
+            onContextMenu={(e) => e.preventDefault()}
             className="hex-svg"
         >
           {roadPaths.map((d, i) => (
-              <path key={`road-${i}`} d={d} fill="none" stroke="#c47a2c" strokeWidth={pixelBaseSize * 0.32} strokeLinecap="round" strokeLinejoin="round" />
+              <path key={`road-${i}`} d={d} fill="none" stroke="#c47a2c" strokeWidth={clampedPixelBaseSize * 0.32} strokeLinecap="round" strokeLinejoin="round" />
           ))}
           {riverPaths.map((d, i) => (
-              <path key={`river-${i}`} d={d} fill="none" stroke="#2f6fa8" strokeWidth={pixelBaseSize * 0.55} strokeLinecap="round" strokeLinejoin="round" />
+              <path key={`river-${i}`} d={d} fill="none" stroke="#2f6fa8" strokeWidth={clampedPixelBaseSize * 0.55} strokeLinecap="round" strokeLinejoin="round" />
           ))}
           {bridgePoints.map(([bx, by], i) => (
-              <circle key={`bridge-${i}`} cx={bx} cy={by} r={pixelBaseSize * 0.32} fill="#c0392b" stroke="#7a231c" strokeWidth={pixelBaseSize * 0.06} />
+              <circle key={`bridge-${i}`} cx={bx} cy={by} r={clampedPixelBaseSize * 0.32} fill="#c0392b" stroke="#7a231c" strokeWidth={clampedPixelBaseSize * 0.06} />
           ))}
 
           {positions.map(({ q, r, x, y }) => {
             const key = tileKey(q, r);
-
-            const handleClick = (event: MouseEvent) => {
-              if (wasDrag.current) {
-                wasDrag.current = false;
-                return;
-              }
-              if (isLocale && tool.type === "river") onRiverEdge(q, r, edgeFromClick(event, x, y));
-              else onCellClick(q, r);
-            };
 
             if (isLocale) {
               if (cubeDistance(q, r) > WORLD_RADIUS) {
@@ -234,9 +262,8 @@ export function HexGrid({
               const tile = getTile(q, r);
               const color = TERRAINS[tile.terrain].color;
               const TerrainIconComp = TERRAIN_ICONS[tile.terrain];
-              const isRiverTool = tool.type === "river";
               return (
-                  <g key={key} className={isRiverTool ? "hex-clickable hex-river-cursor" : "hex-clickable"} onClick={handleClick}>
+                  <g key={key} className={tool.type === "river" ? "hex-clickable hex-river-cursor" : "hex-clickable"}>
                     <polygon points={hexPoints(x, y, hexSize - 1)} fill={color} stroke="#5c4a2a" strokeWidth={0.6} />
                     {tile.features.casa ? (
                         <Icon Comp={Home} x={x} y={y} size={hexSize * 0.55} color="#3b2a1a" />
@@ -256,7 +283,7 @@ export function HexGrid({
             const isCity = data.houseDensity >= CITY_DENSITY_THRESHOLD;
             const isVillage = !isCity && data.houseDensity >= VILLAGE_DENSITY_THRESHOLD;
             return (
-                <g key={key} className="hex-clickable" onClick={handleClick}>
+                <g key={key} className="hex-clickable">
                   <polygon points={hexPoints(x, y, hexSize - 1)} fill={color} stroke="#5c4a2a" strokeWidth={0.8} />
                   {isCity ? (
                       <Icon Comp={Building2} x={x} y={y} size={hexSize * 0.45} color="#3b2a1a" />
@@ -277,8 +304,8 @@ export function HexGrid({
                   x2={s.x2}
                   y2={s.y2}
                   stroke="#c9a227"
-                  strokeWidth={pixelBaseSize * 0.12}
-                  strokeDasharray={`${pixelBaseSize * 0.3} ${pixelBaseSize * 0.2}`}
+                  strokeWidth={clampedPixelBaseSize * 0.12}
+                  strokeDasharray={`${clampedPixelBaseSize * 0.3} ${clampedPixelBaseSize * 0.2}`}
                   strokeLinecap="round"
                   pointerEvents="none"
               />
