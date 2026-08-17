@@ -111,26 +111,32 @@ export function HexGrid({
     return result;
   }, [isLocale, cells, ratio, tilesStore]);
 
+  // Dedup by EXACT macro-cell coordinate pairs (integers), not by rounded pixel position.
+  // Rounded pixels caused a subtle floating-point bug: the same physical corner, computed
+  // independently from two neighboring hexes via cos/sin, can differ by a tiny epsilon that
+  // occasionally straddles a rounding boundary, so the two "identical" edges got different
+  // dedup keys and were BOTH drawn, slightly offset -> a wavy, doubled-looking dashed line.
+  // Coordinate pairs have no such ambiguity.
   const overlaySegments = useMemo(() => {
     if (!showOverlay || level === "globale") return [];
-    const macroCenters = new Map<string, [number, number]>();
+    const macroCoords = new Map<string, [number, number]>();
     cells.forEach(({ q, r }) => {
       const [Q, R] = axialToParent(q, r, RATIO);
-      const key = tileKey(Q, R);
-      if (!macroCenters.has(key)) macroCenters.set(key, axialToPixel(Q, R, hexSize * RATIO));
+      macroCoords.set(tileKey(Q, R), [Q, R]);
     });
 
     const seenEdges = new Set<string>();
     const segments: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
-    macroCenters.forEach(([cx, cy]) => {
+    macroCoords.forEach(([Q, R], key) => {
+      const [cx, cy] = axialToPixel(Q, R, hexSize * RATIO);
       for (let i = 0; i < 6; i++) {
-        const [x1, y1] = hexCorner(cx, cy, hexSize * RATIO - 1, i);
-        const [x2, y2] = hexCorner(cx, cy, hexSize * RATIO - 1, (i + 1) % 6);
-        const a = `${Math.round(x1)},${Math.round(y1)}`;
-        const b = `${Math.round(x2)},${Math.round(y2)}`;
-        const edgeKey = a < b ? `${a}|${b}` : `${b}|${a}`;
+        const dir = EDGE_DIRECTIONS[i];
+        const neighborKey = tileKey(Q + dir.q, R + dir.r);
+        const edgeKey = key < neighborKey ? `${key}|${neighborKey}` : `${neighborKey}|${key}`;
         if (seenEdges.has(edgeKey)) continue;
         seenEdges.add(edgeKey);
+        const [x1, y1] = hexCorner(cx, cy, hexSize * RATIO - 1, i);
+        const [x2, y2] = hexCorner(cx, cy, hexSize * RATIO - 1, (i + 1) % 6);
         segments.push({ x1, y1, x2, y2 });
       }
     });
@@ -242,16 +248,6 @@ export function HexGrid({
             onContextMenu={(e) => e.preventDefault()}
             className="hex-svg"
         >
-          {roadPaths.map((d, i) => (
-              <path key={`road-${i}`} d={d} fill="none" stroke="#c47a2c" strokeWidth={clampedPixelBaseSize * 0.32} strokeLinecap="round" strokeLinejoin="round" />
-          ))}
-          {riverPaths.map((d, i) => (
-              <path key={`river-${i}`} d={d} fill="none" stroke="#2f6fa8" strokeWidth={clampedPixelBaseSize * 0.55} strokeLinecap="round" strokeLinejoin="round" />
-          ))}
-          {bridgePoints.map(([bx, by], i) => (
-              <circle key={`bridge-${i}`} cx={bx} cy={by} r={clampedPixelBaseSize * 0.32} fill="#c0392b" stroke="#7a231c" strokeWidth={clampedPixelBaseSize * 0.06} />
-          ))}
-
           {positions.map(({ q, r, x, y }) => {
             const key = tileKey(q, r);
 
@@ -295,6 +291,16 @@ export function HexGrid({
                 </g>
             );
           })}
+
+          {roadPaths.map((d, i) => (
+              <path key={`road-${i}`} d={d} fill="none" stroke="#c47a2c" strokeWidth={clampedPixelBaseSize * 0.32} strokeLinecap="round" strokeLinejoin="round" />
+          ))}
+          {riverPaths.map((d, i) => (
+              <path key={`river-${i}`} d={d} fill="none" stroke="#2f6fa8" strokeWidth={clampedPixelBaseSize * 0.55} strokeLinecap="round" strokeLinejoin="round" />
+          ))}
+          {bridgePoints.map(([bx, by], i) => (
+              <circle key={`bridge-${i}`} cx={bx} cy={by} r={clampedPixelBaseSize * 0.32} fill="#c0392b" stroke="#7a231c" strokeWidth={clampedPixelBaseSize * 0.06} />
+          ))}
 
           {overlaySegments.map((s, i) => (
               <line

@@ -1,7 +1,6 @@
 import { useMapState } from "./state/useMapState";
 import { Toolbar } from "./components/Toolbar/Toolbar";
 import { ZoomControls } from "./components/Toolbar/ZoomControls";
-import { SaveLoadControls } from "./components/Toolbar/SaveLoadControls";
 import { HexGrid } from "./components/HexGrid/HexGrid";
 import "./App.css";
 
@@ -43,20 +42,19 @@ export default function App() {
             <h1 className="app-title">Cartografo</h1>
             <p className="app-subtitle">Editor di mappe esagonali</p>
 
-            <div className="app-toolbar-row">
-                <ZoomControls
-                    zoomIndex={zoomIndex}
-                    onSetLayer={setLayer}
-                    onZoomVisualIn={zoomVisualIn}
-                    onZoomVisualOut={zoomVisualOut}
-                    showOverlay={showOverlay}
-                    onToggleOverlay={() => setShowOverlay((v) => !v)}
-                    canShowOverlay={level !== "globale"}
-                    compensateOnLayerChange={compensateOnLayerChange}
-                    onToggleCompensate={toggleCompensateOnLayerChange}
-                />
-                <SaveLoadControls onExport={exportMap} onImport={importMap} />
-            </div>
+            <ZoomControls
+                zoomIndex={zoomIndex}
+                onSetLayer={setLayer}
+                onZoomVisualIn={zoomVisualIn}
+                onZoomVisualOut={zoomVisualOut}
+                showOverlay={showOverlay}
+                onToggleOverlay={() => setShowOverlay((v) => !v)}
+                canShowOverlay={level !== "globale"}
+                compensateOnLayerChange={compensateOnLayerChange}
+                onToggleCompensate={toggleCompensateOnLayerChange}
+                onExportMap={exportMap}
+                onImportMap={importMap}
+            />
 
             <Toolbar tool={tool} setTool={setTool} isLocale={isLocale} />
 

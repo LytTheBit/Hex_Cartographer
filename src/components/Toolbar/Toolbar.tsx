@@ -68,9 +68,11 @@ export function Toolbar({ tool, setTool, isLocale }: ToolbarProps) {
                 </button>
             </div>
 
-            {!isLocale && (
-                <span className="toolbar-hint">A questo zoom il terreno si dipinge in blocco su tutta l'area visibile</span>
-            )}
+            <span className="toolbar-hint">
+                {isLocale
+                    ? "Disegna liberamente ogni singola cella con gli strumenti sopra."
+                    : "A questo zoom il terreno si dipinge in blocco su tutta l'area visibile"}
+            </span>
         </div>
     );
 }
