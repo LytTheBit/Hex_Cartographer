@@ -4,7 +4,7 @@ import { Building, Building2, Home, Mountain, Trees, Waves } from "lucide-react"
 import type { LucideIcon } from "lucide-react";
 import { CITY_DENSITY_THRESHOLD, HEX_SIZE, MIN_HEX_SIZE_PX, RATIO, TERRAINS, VIEWPORT_PX, VILLAGE_DENSITY_THRESHOLD, WORLD_RADIUS } from "../../lib/constants";
 import { cubeDistance, generateHexRect, tileKey } from "../../lib/hex/grid";
-import { angleToEdge, axialRound, axialToParent, axialToPixel, EDGE_DIRECTIONS, hexCorner, hexPoints, pixelToAxial } from "../../lib/hex/coordinates";
+import { axialRound, axialToParent, axialToPixel, EDGE_DIRECTIONS, hexCorner, hexPoints, pixelToAxial } from "../../lib/hex/coordinates";
 import { aggregateMacroCellFast, bucketPaintedTilesByMacro, type ClusterData } from "../../lib/hex/aggregation";
 import { computeRiverPaths } from "../../lib/hex/rivers";
 import { computeRoadPaths } from "../../lib/hex/roads";
@@ -30,6 +30,7 @@ interface HexGridProps {
   showOverlay: boolean;
   onCellClick: (q: number, r: number) => void;
   onRiverEdge: (q: number, r: number, edge: number) => void;
+  onRiverStart: (q: number, r: number) => void;
   onPanBy: (dq: number, dr: number) => void;
   onZoomVisualBy: (factor: number) => void;
 }
@@ -49,6 +50,7 @@ export function HexGrid({
                           showOverlay,
                           onCellClick,
                           onRiverEdge,
+                          onRiverStart,
                           onPanBy,
                           onZoomVisualBy,
                         }: HexGridProps) {
@@ -100,6 +102,15 @@ export function HexGrid({
         .map(({ q, r }) => axialToPixel(q, r, clampedPixelBaseSize));
   }, [isLocale, cells, getTile, clampedPixelBaseSize]);
 
+  // Lone river markers: a tile explicitly marked as a river source but not (yet) connected
+  // to any neighbor. Rendered as a small dot instead of a line pointing nowhere in particular.
+  const riverDots = useMemo(() => {
+    if (!isLocale) return [];
+    return cells
+        .filter(({ q, r }) => getTile(q, r).features.fiume?.length === 0)
+        .map(({ q, r }) => axialToPixel(q, r, clampedPixelBaseSize));
+  }, [isLocale, cells, getTile, clampedPixelBaseSize]);
+
   const clusterData = useMemo(() => {
     if (isLocale) return {} as Record<string, ClusterData>;
     const buckets = bucketPaintedTilesByMacro(tilesStore, ratio);
@@ -143,6 +154,58 @@ export function HexGrid({
     return segments;
   }, [showOverlay, level, cells, hexSize]);
 
+  interface HexIcon {
+    Comp: LucideIcon;
+    size: number;
+    color: string;
+  }
+
+  interface HexRenderData {
+    key: string;
+    x: number;
+    y: number;
+    fill: string;
+    isVoid: boolean;
+    icon: HexIcon | null;
+  }
+
+  // Precomputed once per hex: separates "what fill goes on the polygon" from "what icon (if
+  // any) sits on top", so the two can be rendered in different SVG layers (see below) — the
+  // icon layer needs to sit ABOVE rivers/roads, while the polygon fill needs to sit BELOW them.
+  const hexRenderData: HexRenderData[] = useMemo(
+      () =>
+          positions.map(({ q, r, x, y }) => {
+            const key = tileKey(q, r);
+
+            if (isLocale) {
+              if (cubeDistance(q, r) > WORLD_RADIUS) return { key, x, y, fill: "#11141a", isVoid: true, icon: null };
+              const tile = getTile(q, r);
+              const TerrainIconComp = TERRAIN_ICONS[tile.terrain];
+              const icon: HexIcon | null = tile.features.casa
+                  ? { Comp: Home, size: hexSize * 0.55, color: "#3b2a1a" }
+                  : TerrainIconComp
+                      ? { Comp: TerrainIconComp, size: hexSize * 0.5, color: "rgba(0,0,0,0.35)" }
+                      : null;
+              return { key, x, y, fill: TERRAINS[tile.terrain].color, isVoid: false, icon };
+            }
+
+            if (cubeDistance(q * ratio, r * ratio) > WORLD_RADIUS) return { key, x, y, fill: "#11141a", isVoid: true, icon: null };
+            const data = clusterData[key];
+            const TerrainIconComp = TERRAIN_ICONS[data.terrain];
+            const isCity = data.houseDensity >= CITY_DENSITY_THRESHOLD;
+            const isVillage = !isCity && data.houseDensity >= VILLAGE_DENSITY_THRESHOLD;
+            const icon: HexIcon | null = isCity
+                ? { Comp: Building2, size: hexSize * 0.45, color: "#3b2a1a" }
+                : isVillage
+                    ? { Comp: Building, size: hexSize * 0.45, color: "#3b2a1a" }
+                    : TerrainIconComp
+                        ? { Comp: TerrainIconComp, size: hexSize * 0.4, color: "rgba(0,0,0,0.35)" }
+                        : null;
+            return { key, x, y, fill: TERRAINS[data.terrain].color, isVoid: false, icon };
+          }),
+      [positions, isLocale, ratio, getTile, clusterData, hexSize]
+  );
+
   const toSvgPoint = (clientX: number, clientY: number): { x: number; y: number } => {
     const svg = svgRef.current;
     if (!svg) return { x: 0, y: 0 };
@@ -162,12 +225,7 @@ export function HexGrid({
     return { q, r };
   };
 
-  const edgeFromCenter = (x: number, y: number, cx: number, cy: number): number => {
-    const angleDeg = (Math.atan2(y - cy, x - cx) * 180) / Math.PI;
-    return angleToEdge(angleDeg);
-  };
-
-  const applyPaint = (q: number, r: number, svgX: number, svgY: number, fromCell: { q: number; r: number } | null) => {
+  const applyPaint = (q: number, r: number, fromCell: { q: number; r: number } | null) => {
     if (isLocale && tool.type === "river") {
       if (fromCell) {
         const dq = q - fromCell.q;
@@ -176,8 +234,7 @@ export function HexGrid({
         if (edgeIdx !== -1) onRiverEdge(fromCell.q, fromCell.r, edgeIdx);
         return;
       }
-      const [cx, cy] = axialToPixel(q, r, hexSize);
-      onRiverEdge(q, r, edgeFromCenter(svgX, svgY, cx, cy));
+      onRiverStart(q, r);
       return;
     }
     onCellClick(q, r);
@@ -195,7 +252,7 @@ export function HexGrid({
     const { q, r } = hexAtSvgPoint(x, y);
     dragState.current = { mode: "paint", pointerId: event.pointerId, lastKey: tileKey(q, r), lastQ: q, lastR: r };
     svgRef.current?.setPointerCapture(event.pointerId);
-    applyPaint(q, r, x, y, null);
+    applyPaint(q, r, null);
   };
 
   const handlePointerMove = (event: PointerEvent<SVGSVGElement>) => {
@@ -216,7 +273,7 @@ export function HexGrid({
     const { q, r } = hexAtSvgPoint(x, y);
     const key = tileKey(q, r);
     if (key !== drag.lastKey) {
-      applyPaint(q, r, x, y, { q: drag.lastQ, r: drag.lastR });
+      applyPaint(q, r, { q: drag.lastQ, r: drag.lastR });
       drag.lastKey = key;
       drag.lastQ = q;
       drag.lastR = r;
@@ -248,59 +305,33 @@ export function HexGrid({
             onContextMenu={(e) => e.preventDefault()}
             className="hex-svg"
         >
-          {positions.map(({ q, r, x, y }) => {
-            const key = tileKey(q, r);
-
-            if (isLocale) {
-              if (cubeDistance(q, r) > WORLD_RADIUS) {
-                return <polygon key={key} points={hexPoints(x, y, hexSize - 1)} fill="#11141a" stroke="#2a2f37" strokeWidth={0.6} />;
-              }
-              const tile = getTile(q, r);
-              const color = TERRAINS[tile.terrain].color;
-              const TerrainIconComp = TERRAIN_ICONS[tile.terrain];
-              return (
-                  <g key={key} className={tool.type === "river" ? "hex-clickable hex-river-cursor" : "hex-clickable"}>
-                    <polygon points={hexPoints(x, y, hexSize - 1)} fill={color} stroke="#5c4a2a" strokeWidth={0.6} />
-                    {tile.features.casa ? (
-                        <Icon Comp={Home} x={x} y={y} size={hexSize * 0.55} color="#3b2a1a" />
-                    ) : (
-                        TerrainIconComp && <Icon Comp={TerrainIconComp} x={x} y={y} size={hexSize * 0.5} color="rgba(0,0,0,0.35)" />
-                    )}
-                  </g>
-              );
-            }
-
-            if (cubeDistance(q * ratio, r * ratio) > WORLD_RADIUS) {
-              return <polygon key={key} points={hexPoints(x, y, hexSize - 1)} fill="#11141a" stroke="#2a2f37" strokeWidth={0.8} />;
-            }
-            const data = clusterData[key];
-            const color = TERRAINS[data.terrain].color;
-            const TerrainIconComp = TERRAIN_ICONS[data.terrain];
-            const isCity = data.houseDensity >= CITY_DENSITY_THRESHOLD;
-            const isVillage = !isCity && data.houseDensity >= VILLAGE_DENSITY_THRESHOLD;
-            return (
-                <g key={key} className="hex-clickable">
-                  <polygon points={hexPoints(x, y, hexSize - 1)} fill={color} stroke="#5c4a2a" strokeWidth={0.8} />
-                  {isCity ? (
-                      <Icon Comp={Building2} x={x} y={y} size={hexSize * 0.45} color="#3b2a1a" />
-                  ) : isVillage ? (
-                      <Icon Comp={Building} x={x} y={y} size={hexSize * 0.45} color="#3b2a1a" />
-                  ) : (
-                      TerrainIconComp && <Icon Comp={TerrainIconComp} x={x} y={y} size={hexSize * 0.4} color="rgba(0,0,0,0.35)" />
-                  )}
-                </g>
-            );
-          })}
+          {hexRenderData.map((d) => (
+              <polygon
+                  key={d.key}
+                  points={hexPoints(d.x, d.y, hexSize - 1)}
+                  fill={d.fill}
+                  stroke={d.isVoid ? "#2a2f37" : "#5c4a2a"}
+                  strokeWidth={isLocale ? 0.6 : 0.8}
+                  className={!d.isVoid ? (isLocale && tool.type === "river" ? "hex-clickable hex-river-cursor" : "hex-clickable") : undefined}
+              />
+          ))}
 
           {roadPaths.map((d, i) => (
-              <path key={`road-${i}`} d={d} fill="none" stroke="#c47a2c" strokeWidth={clampedPixelBaseSize * 0.32} strokeLinecap="round" strokeLinejoin="round" />
+              <path key={`road-${i}`} d={d} fill="none" stroke="#c47a2c" strokeWidth={clampedPixelBaseSize * 0.16} strokeLinecap="round" strokeLinejoin="round" />
           ))}
           {riverPaths.map((d, i) => (
-              <path key={`river-${i}`} d={d} fill="none" stroke="#2f6fa8" strokeWidth={clampedPixelBaseSize * 0.55} strokeLinecap="round" strokeLinejoin="round" />
+              <path key={`river-${i}`} d={d} fill="none" stroke="#2f6fa8" strokeWidth={clampedPixelBaseSize * 0.22} strokeLinecap="round" strokeLinejoin="round" />
           ))}
           {bridgePoints.map(([bx, by], i) => (
-              <circle key={`bridge-${i}`} cx={bx} cy={by} r={clampedPixelBaseSize * 0.32} fill="#c0392b" stroke="#7a231c" strokeWidth={clampedPixelBaseSize * 0.06} />
+              <circle key={`bridge-${i}`} cx={bx} cy={by} r={clampedPixelBaseSize * 0.16} fill="#c0392b" stroke="#7a231c" strokeWidth={clampedPixelBaseSize * 0.04} />
           ))}
+          {riverDots.map(([dx, dy], i) => (
+              <circle key={`riverdot-${i}`} cx={dx} cy={dy} r={clampedPixelBaseSize * 0.12} fill="#2f6fa8" />
+          ))}
+
+          {hexRenderData.map(
+              (d) => d.icon && <Icon key={`icon-${d.key}`} Comp={d.icon.Comp} x={d.x} y={d.y} size={d.icon.size} color={d.icon.color} />
+          )}
 
           {overlaySegments.map((s, i) => (
               <line

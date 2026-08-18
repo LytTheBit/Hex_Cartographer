@@ -75,12 +75,32 @@ export function useMapState() {
             const key = tileKey(q, r);
             setTilesStore((prev) => {
                 const current = prev[key] ?? DEFAULT_TILE;
-                let next: Tile;
-                if (tool.type === "terrain") next = { ...current, terrain: tool.value };
-                else if (tool.type === "feature") next = { ...current, features: { ...current.features, [tool.value]: true } };
-                else if (tool.type === "erase") next = { terrain: "pianura", features: {} };
-                else return prev;
-                return { ...prev, [key]: next };
+
+                if (tool.type === "terrain") {
+                    return { ...prev, [key]: { ...current, terrain: tool.value } };
+                }
+                if (tool.type === "feature") {
+                    return { ...prev, [key]: { ...current, features: { ...current.features, [tool.value]: true } } };
+                }
+                if (tool.type === "erase") {
+                    const next: TileMap = { ...prev, [key]: { terrain: "pianura", features: {} } };
+                    // Also detach any neighbor's river edge that was pointing at this tile:
+                    // otherwise erasing a river segment left a "dangling" stub on the
+                    // neighbor, bent toward a hex that no longer has a river to meet it.
+                    EDGE_DIRECTIONS.forEach((dir, edge) => {
+                        const nKey = tileKey(q + dir.q, r + dir.r);
+                        const neighborTile = next[nKey];
+                        const oppEdge = oppositeEdge(edge);
+                        if (neighborTile?.features.fiume?.includes(oppEdge)) {
+                            next[nKey] = {
+                                ...neighborTile,
+                                features: { ...neighborTile.features, fiume: neighborTile.features.fiume!.filter((e) => e !== oppEdge) },
+                            };
+                        }
+                    });
+                    return next;
+                }
+                return prev; // "river" tool: handled by setRiverEdge / placeRiverStart
             });
         },
         [tool]
@@ -135,6 +155,38 @@ export function useMapState() {
         [isLocale]
     );
 
+    /**
+     * First click of a river gesture (not a drag): rather than guessing a direction from
+     * where inside the hex you clicked (which produced stray, unintended connections),
+     * check the tile's neighbors — if one already has a river edge pointing at (q, r),
+     * connect to it. If none do, just mark (q, r) as a lone river source: `fiume: []`
+     * (present but empty), rendered as a small dot rather than a directional line.
+     */
+    const placeRiverStart = useCallback(
+        (q: number, r: number) => {
+            if (!isLocale) return;
+            const key = tileKey(q, r);
+            setTilesStore((prev) => {
+                const matchingEdges: number[] = [];
+                EDGE_DIRECTIONS.forEach((dir, edge) => {
+                    const neighborTile = prev[tileKey(q + dir.q, r + dir.r)];
+                    if (neighborTile?.features.fiume?.includes(oppositeEdge(edge))) matchingEdges.push(edge);
+                });
+
+                const current = prev[key] ?? DEFAULT_TILE;
+                const existingEdges = current.features.fiume;
+
+                if (matchingEdges.length > 0) {
+                    const merged = Array.from(new Set([...(existingEdges ?? []), ...matchingEdges]));
+                    return { ...prev, [key]: { ...current, features: { ...current.features, fiume: merged } } };
+                }
+                if (existingEdges) return prev; // already marked (dot or connected): nothing to change
+                return { ...prev, [key]: { ...current, features: { ...current.features, fiume: [] } } };
+            });
+        },
+        [isLocale]
+    );
+
     const exportMap = useCallback((): string => JSON.stringify({ version: 1, tiles: tilesStore }, null, 2), [tilesStore]);
 
     const importMap = useCallback((json: string): boolean => {
@@ -171,6 +223,7 @@ export function useMapState() {
         getTile,
         handleCellClick,
         setRiverEdge,
+        placeRiverStart,
         exportMap,
         importMap,
     };

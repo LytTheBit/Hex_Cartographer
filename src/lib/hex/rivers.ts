@@ -24,6 +24,7 @@ export function computeRiverPaths(cells: AxialCoord[], getTile: (q: number, r: n
     key: string;
     x: number;
     y: number;
+    isWater: boolean;
     edgeMidKeys: string[];
   }
 
@@ -32,7 +33,8 @@ export function computeRiverPaths(cells: AxialCoord[], getTile: (q: number, r: n
   const midToCenters = new Map<string, string[]>();
 
   cells.forEach(({ q, r }) => {
-    const edges = getTile(q, r).features.fiume;
+    const tile = getTile(q, r);
+    const edges = tile.features.fiume;
     if (!edges || edges.length === 0) return;
 
     const [cx, cy] = axialToPixel(q, r, hexSize);
@@ -49,7 +51,7 @@ export function computeRiverPaths(cells: AxialCoord[], getTile: (q: number, r: n
       midToCenters.set(midKey, list);
     });
 
-    centers.set(centerKey, { key: centerKey, x: cx, y: cy, edgeMidKeys });
+    centers.set(centerKey, { key: centerKey, x: cx, y: cy, isWater: tile.terrain === "acqua", edgeMidKeys });
   });
 
   const visitedMid = new Set<string>();
@@ -77,6 +79,11 @@ export function computeRiverPaths(cells: AxialCoord[], getTile: (q: number, r: n
       if (!nextCenterKey) break;
       const nextCenter = centers.get(nextCenterKey);
       if (!nextCenter) break;
+
+      // A river flowing into a water tile stops right at the shared edge: the water tile
+      // itself already reads as "the lake", so its center is never added to the path.
+      if (nextCenter.isWater) break;
+
       points.push({ x: nextCenter.x, y: nextCenter.y });
 
       if (nextCenter.edgeMidKeys.length === 2) {
@@ -92,14 +99,14 @@ export function computeRiverPaths(cells: AxialCoord[], getTile: (q: number, r: n
   }
 
   centers.forEach((center) => {
-    if (center.edgeMidKeys.length !== 2) {
+    if (center.edgeMidKeys.length !== 2 || center.isWater) {
       center.edgeMidKeys.forEach((midKey) => {
         if (!visitedMid.has(midKey)) traceFrom(center.key, midKey);
       });
     }
   });
   centers.forEach((center) => {
-    if (center.edgeMidKeys.length === 2) {
+    if (center.edgeMidKeys.length === 2 && !center.isWater) {
       center.edgeMidKeys.forEach((midKey) => {
         if (!visitedMid.has(midKey)) traceFrom(center.key, midKey);
       });

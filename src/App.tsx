@@ -27,6 +27,7 @@ export default function App() {
         getTile,
         handleCellClick,
         setRiverEdge,
+        placeRiverStart,
         exportMap,
         importMap,
     } = useMapState();
@@ -34,7 +35,7 @@ export default function App() {
     const hint = !isLocale
         ? "Left-click (or drag) to paint the terrain of the whole area below. Right-drag to pan, wheel to zoom."
         : tool.type === "river"
-            ? "Left-click near a hex's side to start a river; keep dragging to extend it."
+            ? "Left-click a hex to start a river (it connects automatically to any neighboring river, or leaves a dot); drag from it to extend."
             : "Paint terrain and place houses/roads; drag to paint several hexes at once. Right-drag to pan, wheel to zoom.";
 
     return (
@@ -69,6 +70,7 @@ export default function App() {
                 showOverlay={showOverlay}
                 onCellClick={handleCellClick}
                 onRiverEdge={setRiverEdge}
+                onRiverStart={placeRiverStart}
                 onPanBy={panBy}
                 onZoomVisualBy={zoomVisualBy}
             />
