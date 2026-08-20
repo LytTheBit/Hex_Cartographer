@@ -7,7 +7,7 @@ import { LEVELS, LEVEL_RATIOS, VISUAL_ZOOM_MAX, VISUAL_ZOOM_MIN, VISUAL_ZOOM_STE
 
 export type Tool =
     | { type: "terrain"; value: TerrainType }
-    | { type: "feature"; value: "casa" | "strada" }
+    | { type: "feature"; value: "casa" | "strada" | "castello" | "campo" | "miniera" }
     | { type: "river" }
     | { type: "erase" };
 

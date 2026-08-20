@@ -1,19 +1,19 @@
 import { useMemo, useRef } from "react";
-import type { PointerEvent, WheelEvent } from "react";
-import { Building, Building2, Home, Mountain, Trees, Waves } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import type { PointerEvent, WheelEvent, ComponentType } from "react";
+import { Building, Building2, Castle, Home, Mountain, Pickaxe, Trees, Waves, Wheat } from "lucide-react";
 import { CITY_DENSITY_THRESHOLD, HEX_SIZE, MIN_HEX_SIZE_PX, RATIO, TERRAINS, VIEWPORT_PX, VILLAGE_DENSITY_THRESHOLD, WORLD_RADIUS } from "../../lib/constants";
 import { cubeDistance, generateHexRect, tileKey } from "../../lib/hex/grid";
 import { axialRound, axialToParent, axialToPixel, EDGE_DIRECTIONS, hexCorner, hexPoints, pixelToAxial } from "../../lib/hex/coordinates";
 import { aggregateMacroCellFast, bucketPaintedTilesByMacro, type ClusterData } from "../../lib/hex/aggregation";
 import { computeRiverPaths } from "../../lib/hex/rivers";
 import { computeRoadPaths } from "../../lib/hex/roads";
-import { Icon } from "../icons/Icon";
+import { Icon, type IconComponentProps } from "../icons/Icon";
+import { BridgeIcon } from "../icons/BridgeIcon";
 import type { AxialCoord, MapLevel, Tile, TerrainType, TileMap } from "../../types/map";
 import type { Tool } from "../../state/useMapState";
 import "./HexGrid.css";
 
-const TERRAIN_ICONS: Partial<Record<TerrainType, LucideIcon>> = {
+const TERRAIN_ICONS: Partial<Record<TerrainType, ComponentType<IconComponentProps>>> = {
   foresta: Trees,
   montagna: Mountain,
   acqua: Waves,
@@ -122,12 +122,6 @@ export function HexGrid({
     return result;
   }, [isLocale, cells, ratio, tilesStore]);
 
-  // Dedup by EXACT macro-cell coordinate pairs (integers), not by rounded pixel position.
-  // Rounded pixels caused a subtle floating-point bug: the same physical corner, computed
-  // independently from two neighboring hexes via cos/sin, can differ by a tiny epsilon that
-  // occasionally straddles a rounding boundary, so the two "identical" edges got different
-  // dedup keys and were BOTH drawn, slightly offset -> a wavy, doubled-looking dashed line.
-  // Coordinate pairs have no such ambiguity.
   const overlaySegments = useMemo(() => {
     if (!showOverlay || level === "globale") return [];
     const macroCoords = new Map<string, [number, number]>();
@@ -155,7 +149,7 @@ export function HexGrid({
   }, [showOverlay, level, cells, hexSize]);
 
   interface HexIcon {
-    Comp: LucideIcon;
+    Comp: ComponentType<IconComponentProps>;
     size: number;
     color: string;
   }
@@ -169,9 +163,6 @@ export function HexGrid({
     icon: HexIcon | null;
   }
 
-  // Precomputed once per hex: separates "what fill goes on the polygon" from "what icon (if
-  // any) sits on top", so the two can be rendered in different SVG layers (see below) — the
-  // icon layer needs to sit ABOVE rivers/roads, while the polygon fill needs to sit BELOW them.
   const hexRenderData: HexRenderData[] = useMemo(
       () =>
           positions.map(({ q, r, x, y }) => {
@@ -181,11 +172,17 @@ export function HexGrid({
               if (cubeDistance(q, r) > WORLD_RADIUS) return { key, x, y, fill: "#11141a", isVoid: true, icon: null };
               const tile = getTile(q, r);
               const TerrainIconComp = TERRAIN_ICONS[tile.terrain];
-              const icon: HexIcon | null = tile.features.casa
-                  ? { Comp: Home, size: hexSize * 0.55, color: "#3b2a1a" }
-                  : TerrainIconComp
-                      ? { Comp: TerrainIconComp, size: hexSize * 0.5, color: "rgba(0,0,0,0.35)" }
-                      : null;
+              const icon: HexIcon | null = tile.features.castello
+                  ? { Comp: Castle, size: hexSize * 0.55, color: "#3b2a1a" }
+                  : tile.features.casa
+                      ? { Comp: Home, size: hexSize * 0.55, color: "#3b2a1a" }
+                      : tile.features.campo
+                          ? { Comp: Wheat, size: hexSize * 0.5, color: "#5c4a1a" }
+                          : tile.features.miniera
+                              ? { Comp: Pickaxe, size: hexSize * 0.5, color: "#3b3b42" }
+                              : TerrainIconComp
+                                  ? { Comp: TerrainIconComp, size: hexSize * 0.5, color: "rgba(0,0,0,0.35)" }
+                                  : null;
               return { key, x, y, fill: TERRAINS[tile.terrain].color, isVoid: false, icon };
             }
 
@@ -320,13 +317,13 @@ export function HexGrid({
               <path key={`road-${i}`} d={d} fill="none" stroke="#c47a2c" strokeWidth={clampedPixelBaseSize * 0.16} strokeLinecap="round" strokeLinejoin="round" />
           ))}
           {riverPaths.map((d, i) => (
-              <path key={`river-${i}`} d={d} fill="none" stroke="#2f6fa8" strokeWidth={clampedPixelBaseSize * 0.22} strokeLinecap="round" strokeLinejoin="round" />
+              <path key={`river-${i}`} d={d} fill="none" stroke="#5b8fb0" strokeWidth={clampedPixelBaseSize * 0.22} strokeLinecap="round" strokeLinejoin="round" />
           ))}
           {bridgePoints.map(([bx, by], i) => (
-              <circle key={`bridge-${i}`} cx={bx} cy={by} r={clampedPixelBaseSize * 0.16} fill="#c0392b" stroke="#7a231c" strokeWidth={clampedPixelBaseSize * 0.04} />
+              <Icon key={`bridge-${i}`} Comp={BridgeIcon} x={bx} y={by} size={clampedPixelBaseSize * 0.75} color="#7a4a2c" />
           ))}
           {riverDots.map(([dx, dy], i) => (
-              <circle key={`riverdot-${i}`} cx={dx} cy={dy} r={clampedPixelBaseSize * 0.12} fill="#2f6fa8" />
+              <circle key={`riverdot-${i}`} cx={dx} cy={dy} r={clampedPixelBaseSize * 0.12} fill="#5b8fb0" />
           ))}
 
           {hexRenderData.map(

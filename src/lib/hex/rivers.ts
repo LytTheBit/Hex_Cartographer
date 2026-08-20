@@ -99,7 +99,8 @@ export function computeRiverPaths(cells: AxialCoord[], getTile: (q: number, r: n
   }
 
   centers.forEach((center) => {
-    if (center.edgeMidKeys.length !== 2 || center.isWater) {
+    if (center.isWater) return; // water is only ever a terminus reached FROM land, never a start
+    if (center.edgeMidKeys.length !== 2) {
       center.edgeMidKeys.forEach((midKey) => {
         if (!visitedMid.has(midKey)) traceFrom(center.key, midKey);
       });

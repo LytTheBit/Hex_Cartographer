@@ -4,6 +4,9 @@ export interface TileFeatures {
   fiume?: number[];
   casa?: boolean;
   strada?: boolean;
+  castello?: boolean;
+  campo?: boolean;
+  miniera?: boolean;
 }
 
 export interface Tile {

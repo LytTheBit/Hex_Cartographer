@@ -1,4 +1,4 @@
-import { Home, Route, Waves } from "lucide-react";
+import { Castle, Home, Pickaxe, Route, Waves, Wheat } from "lucide-react";
 import { TERRAINS } from "../../lib/constants";
 import type { Tool } from "../../state/useMapState";
 import type { TerrainType } from "../../types/map";
@@ -57,6 +57,33 @@ export function Toolbar({ tool, setTool, isLocale }: ToolbarProps) {
                     onClick={() => setTool({ type: "feature", value: "casa" })}
                 >
                     <Home size={16} color="#e8e2d0" />
+                </button>
+                <button
+                    className="icon-btn"
+                    disabled={!isLocale}
+                    style={{ borderColor: tool.type === "feature" && tool.value === "castello" ? "#c9a227" : "transparent" }}
+                    title="Castello (richiede zoom Locale)"
+                    onClick={() => setTool({ type: "feature", value: "castello" })}
+                >
+                    <Castle size={16} color="#b8a888" />
+                </button>
+                <button
+                    className="icon-btn"
+                    disabled={!isLocale}
+                    style={{ borderColor: tool.type === "feature" && tool.value === "campo" ? "#c9a227" : "transparent" }}
+                    title="Campo coltivato (richiede zoom Locale)"
+                    onClick={() => setTool({ type: "feature", value: "campo" })}
+                >
+                    <Wheat size={16} color="#d4b04a" />
+                </button>
+                <button
+                    className="icon-btn"
+                    disabled={!isLocale}
+                    style={{ borderColor: tool.type === "feature" && tool.value === "miniera" ? "#c9a227" : "transparent" }}
+                    title="Miniera (richiede zoom Locale)"
+                    onClick={() => setTool({ type: "feature", value: "miniera" })}
+                >
+                    <Pickaxe size={16} color="#9a9aa5" />
                 </button>
                 <button
                     className="icon-btn"
